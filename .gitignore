@@ -25,3 +25,6 @@ replay_pid*
 
 # secret
 .env
+
+# target and build folders
+target/
