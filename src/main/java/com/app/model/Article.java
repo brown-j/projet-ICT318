@@ -1,5 +1,5 @@
 // Path: src/main/java/com/exemple/model/Article.java
-package com.app.models;
+package com.app.model;
 
 import java.io.Serializable;
 

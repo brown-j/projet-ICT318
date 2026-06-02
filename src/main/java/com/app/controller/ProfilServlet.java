@@ -1,7 +1,6 @@
 // Path: src/main/java/com/exemple/controller/ProfilServlet.java
 package com.app.controller;
 
-import com.app.models.Article;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -11,6 +10,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.app.model.Article;
 
 @WebServlet("/profil") // L'URL pour appeler cette servlet
 public class ProfilServlet extends HttpServlet {
