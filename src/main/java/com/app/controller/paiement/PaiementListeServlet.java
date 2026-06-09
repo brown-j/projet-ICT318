@@ -14,6 +14,7 @@ public class PaiementListeServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // Historique comptable des recettes (timbres, frais de dossier)
+        request.setAttribute("view", "/WEB-INF/jsp/modules/paiement/historique.jsp");
+        request.getRequestDispatcher("/WEB-INF/jsp/layouts/base-layout.jsp").forward(request, response);
     }
 }

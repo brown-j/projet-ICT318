@@ -85,7 +85,3 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
 
-<!-- Scripts -->
-<script src="${pageContext.request.contextPath}/resources/js/app-core.js"></script>
-<script src="${pageContext.request.contextPath}/resources/js/charts-init.js"></script>
-

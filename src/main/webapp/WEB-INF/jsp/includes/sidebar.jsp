@@ -14,21 +14,21 @@
   <nav class="sidebar-nav" role="navigation" aria-label="Navigation principale">
     <div class="nav-section">
       <div class="nav-section-label">Principal</div>
-      <a class="nav-item active" href="${pageContext.request.contextPath}/dashboard" aria-current="page">
+      <a class="nav-item" href="${pageContext.request.contextPath}/dashboard" data-title="Tableau de bord">
         <i class="ti ti-layout-dashboard" aria-hidden="true"></i>
         Tableau de bord
       </a>
-      <a class="nav-item" href="${pageContext.request.contextPath}/citoyen/liste">
+      <a class="nav-item" href="${pageContext.request.contextPath}/citoyen/liste" data-title="Citoyens">
         <i class="ti ti-users" aria-hidden="true"></i>
         Citoyens
         <span class="nav-badge">1 284</span>
       </a>
-      <a class="nav-item" href="${pageContext.request.contextPath}/acte/liste">
+      <a class="nav-item" href="${pageContext.request.contextPath}/acte/liste" data-title="Actes civils">
         <i class="ti ti-file-certificate" aria-hidden="true"></i>
         Actes civils
         <span class="nav-badge">47</span>
       </a>
-      <a class="nav-item" href="${pageContext.request.contextPath}/demande/liste">
+      <a class="nav-item" href="${pageContext.request.contextPath}/demande/liste" data-title="Demandes">
         <i class="ti ti-clipboard-list" aria-hidden="true"></i>
         Demandes
         <span class="nav-badge" style="background:var(--c-accent-50);color:var(--c-accent-600)">12</span>
@@ -37,11 +37,11 @@
 
     <div class="nav-section">
       <div class="nav-section-label">Finances</div>
-      <a class="nav-item" href="${pageContext.request.contextPath}/paiement/liste">
+      <a class="nav-item" href="${pageContext.request.contextPath}/paiement/liste" data-title="Paiements">
         <i class="ti ti-credit-card" aria-hidden="true"></i>
         Paiements
       </a>
-      <a class="nav-item" href="${pageContext.request.contextPath}/rapport/export">
+      <a class="nav-item" href="${pageContext.request.contextPath}/rapport/export" data-title="Rapports">
         <i class="ti ti-chart-bar" aria-hidden="true"></i>
         Rapports
       </a>
@@ -49,15 +49,15 @@
 
     <div class="nav-section">
       <div class="nav-section-label">Administration</div>
-      <a class="nav-item" href="${pageContext.request.contextPath}/agenda/rendez-vous">
+      <a class="nav-item" href="${pageContext.request.contextPath}/agenda/rendez-vous" data-title="Agenda">
         <i class="ti ti-calendar" aria-hidden="true"></i>
         Agenda
       </a>
-      <a class="nav-item" href="${pageContext.request.contextPath}/officier/liste">
+      <a class="nav-item" href="${pageContext.request.contextPath}/officier/liste" data-title="Officiers">
         <i class="ti ti-user-shield" aria-hidden="true"></i>
         Officiers
       </a>
-      <a class="nav-item" href="${pageContext.request.contextPath}/parametre/configuration">
+      <a class="nav-item" href="${pageContext.request.contextPath}/parametre/configuration" data-title="Paramètres">
         <i class="ti ti-settings" aria-hidden="true"></i>
         Paramètres
       </a>
@@ -77,4 +77,3 @@
     </div>
   </div>
 </aside>
-
