@@ -16,10 +16,14 @@ public enum Icons {
     CASH,
     CALENDAR_PLUS,
     USER_CHECK,
-    CREDIT_CARD;
+    CREDIT_CARD,
+    EYE,
+    SEARCH,
+    X,
+    EDIT;
 
     @Override
     public String toString() {
-        return "ti ti-" + name().toLowerCase().replace('_', '-');
+        return "ti ti-" + name().toLowerCase().replace('_', '-'); // ti ti-download
     }
 }

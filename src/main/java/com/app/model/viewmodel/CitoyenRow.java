@@ -1,6 +1,6 @@
 package com.app.model.viewmodel;
 
-import com.app.model.jpa.Citoyen;
+import com.app.jpa.model.Citoyen;
 import com.app.model.theme.ThemeColor;
 import java.time.format.DateTimeFormatter;
 

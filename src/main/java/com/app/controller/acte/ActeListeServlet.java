@@ -1,5 +1,7 @@
 package com.app.controller.acte;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityTransaction;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -7,109 +9,178 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import com.google.gson.Gson;
-import com.app.model.jpa.ActeEtatCivil;
-import com.app.model.jpa.TypeActe;
-import com.app.model.jpa.Citoyen;
-import com.app.model.jpa.enums.StatutActe;
+import com.app.jpa.config.JPAConfig;
+import com.app.jpa.dao.JPADao;
+import com.app.jpa.model.ActeEtatCivil;
+import com.app.jpa.model.Citoyen;
+import com.app.jpa.model.OfficierEtatCivil;
+import com.app.jpa.model.JPAEnum.Sexe;
+import com.app.jpa.model.JPAEnum.StatutActe;
+import com.app.jpa.model.JPAEnum.TypeActe;
 import com.app.model.viewmodel.ActeCivilRow;
+import com.app.ui.ActeEtatCivilFormFactory;
 
-@WebServlet("/acte/liste")
+@WebServlet(value = "/acte/liste", loadOnStartup = 1)
 public class ActeListeServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
+	@Override
+	public void init() throws ServletException {
+		super.init();
+		initialiserDonneesSiVide();
+	}
 
-        // 1. Récupération des données d'actes d'état civil
-        List<ActeEtatCivil> registreActes = gererRegistreActesMock();
+	@Override
+	protected void doGet(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
 
-        // 2. Transformation de la couche JPA vers la couche ViewModel épurée
-        List<ActeCivilRow> actesRows = registreActes.stream()
-                .map(ActeCivilRow::new)
-                .collect(Collectors.toList());
+		EntityManager em = JPAConfig.getEntityManager();
 
-        // 3. Sérialisation propre en JSON pour le composant tableau.js
-        Gson gson = new Gson();
-        String actesJson = gson.toJson(actesRows);
+		try {
+			// 1. Récupération et sérialisation des données pour la table
+			List<ActeEtatCivil> registreActes = em.createQuery(
+					"SELECT a FROM ActeEtatCivil a LEFT JOIN FETCH a.citoyenPrincipal",
+					ActeEtatCivil.class).getResultList();
 
-        // 4. Injection des attributs requis pour le Layout Maître
-        request.setAttribute("actesJson", actesJson);
-        request.setAttribute("totalCount", actesRows.size());
+			List<ActeCivilRow> actesRows = registreActes.stream()
+					.map(ActeCivilRow::new)
+					.collect(Collectors.toList());
 
-        // 5. Redirection ciblée vers la vue des actes civils
-        request.setAttribute("view", "/WEB-INF/jsp/modules/acte/liste.jsp");
-        request.getRequestDispatcher("/WEB-INF/jsp/layouts/base-layout.jsp").forward(request, response);
-    }
+			Gson gson = new Gson();
+			String actesJson = gson.toJson(actesRows);
+			request.setAttribute("actesJson", actesJson);
+			request.setAttribute("totalCount", actesRows.size());
 
-    /**
-     * Génère un jeu d'essai réaliste d'actes civils pour la Mairie de Yaoundé III.
-     */
-    private List<ActeEtatCivil> gererRegistreActesMock() {
-        // Préparation des types d'actes récurrents
-        TypeActe naissance = createMockTypeActe("Naissance");
-        TypeActe mariage = createMockTypeActe("Mariage");
-        TypeActe deces = createMockTypeActe("Décès");
+			// 2. EXTRACTION DU PARAMÉTRAGE GÉNÉRIQUE D'AFFICHAGE (id & mode)
+			String idStr = request.getParameter("id");
+			String mode = request.getParameter("mode"); // attendu : "create", "edit", "preview"
 
-        return Arrays.asList(
-                // Actes Délivrés avec PDF valide
-                createMockActe(1L, "NAI-2025-00418", naissance, "Amougou", "Sylvain", LocalDate.of(2025, 2, 10),
-                        LocalDate.of(2025, 2, 28), "Mairie Ydé III", StatutActe.DELIVRE, "doc_00418.pdf"),
-                createMockActe(2L, "MAR-2026-10552", mariage, "Atangana", "Dieudonné", LocalDate.of(2026, 1, 15),
-                        LocalDate.of(2026, 1, 20), "Bastos", StatutActe.DELIVRE, "doc_10552.pdf"),
-                createMockActe(3L, "DEC-2026-30119", deces, "Ona", "Samuel", LocalDate.of(2026, 5, 14),
-                        LocalDate.of(2026, 5, 18), "Hôpital Central", StatutActe.DELIVRE, "doc_30119.pdf"),
+			ActeEtatCivil actePourFormulaire = null;
+			boolean isReadOnly = false;
 
-                // Actes En cours (En attente de traitement ou signature) - Pas de PDF attaché
-                createMockActe(4L, "NAI-2026-00984", naissance, "Bella", "Chantal", LocalDate.of(2026, 6, 1),
-                        LocalDate.of(2026, 6, 5), "Clinique de Fouda", StatutActe.EN_COURS, null),
-                createMockActe(5L, "MAR-2026-01102", mariage, "Mbarga", "Jean-Paul", LocalDate.of(2026, 5, 29),
-                        LocalDate.of(2026, 6, 2), "Mairie Ydé III", StatutActe.EN_COURS, null),
+			if (idStr != null && !idStr.trim().isEmpty()) {
+				Long id = Long.parseLong(idStr);
+				actePourFormulaire = em.find(ActeEtatCivil.class, id);
 
-                // Actes Archivés ou Annulés
-                createMockActe(6L, "NAI-1990-88412", naissance, "Abena Zoa", "Marie", LocalDate.of(1990, 3, 14),
-                        LocalDate.of(1990, 3, 20), "Melen", StatutActe.ARCHIVE, "archive_90.pdf"),
-                createMockActe(7L, "MAR-2024-00142", mariage, "Essama", "Paul", LocalDate.of(2024, 4, 11),
-                        LocalDate.of(2024, 4, 12), "Mairie Ydé III", StatutActe.ANNULE, null));
-    }
+				if (actePourFormulaire != null) {
+					// Ordre d'ouverture automatique de la modal pour le JavaScript (JSTL)
+					request.setAttribute("autoOpenModal", true);
 
-    /**
-     * Méthode utilitaire pour générer à la volée un TypeActe mocké.
-     */
-    private TypeActe createMockTypeActe(String libelle) {
-        TypeActe type = new TypeActe();
-        // Si ta propriété s'appelle setNom() au lieu de setLibelle(), ajuste ici :
-        type.setLibelle(libelle);
-        return type;
-    }
+					// Contrainte du comportement selon le cas (mode de rendu)
+					if ("preview".equalsIgnoreCase(mode)) {
+						isReadOnly = true;
+					}
+				}
+			}
 
-    /**
-     * Méthode utilitaire pour assembler rapidement un ActeEtatCivil complet.
-     */
-    private ActeEtatCivil createMockActe(Long id, String numero, TypeActe type, String nomCitoyen, String prenomCitoyen,
-            LocalDate dateEvenement, LocalDate dateEtabli, String lieu, StatutActe statut, String pdf) {
-        ActeEtatCivil acte = new ActeEtatCivil();
-        acte.setId(id);
-        acte.setNumeroActe(numero);
-        acte.setTypeActe(type);
+			// Fallback d'initialisation en mode création si aucun acte n'est détecté
+			if (actePourFormulaire == null) {
+				actePourFormulaire = new ActeEtatCivil();
+				// Si l'utilisateur clique explicitement sur "Ajouter", on force l'ouverture
+				if ("create".equalsIgnoreCase(mode)) {
+					request.setAttribute("autoOpenModal", true);
+				}
+			}
 
-        // Citoyen minimaliste lié à l'acte
-        Citoyen citoyen = new Citoyen();
-        citoyen.setNom(nomCitoyen);
-        citoyen.setPrenom(prenomCitoyen);
-        acte.setCitoyenPrincipal(citoyen);
+			// 3. Extraction des référentiels d'aide à la saisie
+			List<TypeActe> listeTypes = java.util.Arrays.asList(TypeActe.values());
+			List<Citoyen> listeCitoyens = em.createQuery("SELECT c FROM Citoyen c", Citoyen.class).getResultList();
+			List<OfficierEtatCivil> listeOfficiers = em
+					.createQuery("SELECT o FROM OfficierEtatCivil o", OfficierEtatCivil.class).getResultList();
 
-        acte.setDateEvenement(dateEvenement);
-        acte.setDateEtablissement(dateEtabli);
-        acte.setLieuEvenement(lieu);
-        acte.setStatut(statut);
-        acte.setFichierPdf(pdf);
+			// 4. Génération du formulaire en lui transmettant sa contrainte de lecture
+			// seule
+			String formulaireHtml = ActeEtatCivilFormFactory.genererHtml(
+					actePourFormulaire,
+					listeTypes,
+					listeCitoyens,
+					listeOfficiers,
+					request.getContextPath() + "/acte/formulaire",
+					isReadOnly);
+			request.setAttribute("formulaireHtml", formulaireHtml);
 
-        return acte;
-    }
+			request.setAttribute("view", "/WEB-INF/jsp/modules/acte/liste-acte.jsp");
+			request.getRequestDispatcher("/WEB-INF/jsp/layouts/base-layout.jsp").forward(request, response);
+
+		} finally {
+			if (em != null && em.isOpen()) {
+				em.close();
+			}
+		}
+	}
+
+	/**
+	 * Insère un jeu de données de test cohérent si le registre des actes est vide
+	 * en BDD.
+	 */
+	private void initialiserDonneesSiVide() {
+		EntityManager em = JPAConfig.getEntityManager();
+
+		try {
+			Long countActes = em.createQuery("SELECT COUNT(a) FROM ActeEtatCivil a", Long.class).getSingleResult();
+			if (countActes > 0)
+				return;
+
+			EntityTransaction tx = em.getTransaction();
+			try {
+				tx.begin();
+
+				System.out.println(">>> Insertion des données fictives via le mini-ORM JPADao...");
+
+				// 💡 Instanciation de ton client d'accès à la manière de Prisma
+				JPADao prisma = new JPADao(em);
+
+				// Insertion des citoyens (Les 3 derniers paramètres à null prennent les valeurs
+				// par défaut)
+				Citoyen c1 = prisma.citoyen.create("Amougou", "Sylvain", "", "Melen", Sexe.M,
+						LocalDate.of(1989, 2, 28), null, null, null);
+
+				Citoyen c2 = prisma.citoyen.create("Atangana", "Dieudonné", "", "Bastos", Sexe.M,
+						LocalDate.of(1963, 4, 12), null, null, null);
+
+				Citoyen c3 = prisma.citoyen.create("Ona", "Samuel", "", "Bastos", Sexe.M,
+						LocalDate.of(1940, 2, 14), null, null, null);
+
+				Citoyen c4 = prisma.citoyen.create("Bella", "Chantal", "", "Nlongkak", Sexe.F,
+						LocalDate.of(1988, 5, 18), null, null, null);
+
+				// Insertion de l'officier (Les 4 derniers paramètres gèrent dynamiquement les
+				// valeurs par défaut)
+				OfficierEtatCivil officier = prisma.officier.create("", "Etoa", "Jean-Marie",
+						"677177877", "2ème Adjoint", "Service Civil", null, "Etoa@1234", null, null);
+
+				// Insertion des actes d'état civil (Attention à la réorganisation des
+				// paramètres)
+				prisma.acte.create("NAI-2025-00418", TypeActe.NAISSANCE, c1, officier,
+						LocalDate.of(2025, 2, 10), LocalDate.of(2025, 2, 28), "Mairie Ydé III", StatutActe.DELIVRE,
+						"doc_00418.pdf");
+
+				prisma.acte.create("MAR-2026-10552", TypeActe.MARIAGE, c2, officier, LocalDate.of(2026, 1, 15),
+						LocalDate.of(2026, 1, 20), "Bastos", StatutActe.DELIVRE,
+						"doc_10552.pdf");
+
+				prisma.acte.create("DEC-2026-30119", TypeActe.DECES, c3, officier,
+						LocalDate.of(2026, 5, 14), LocalDate.of(2026, 5, 18), "Hôpital Central", StatutActe.DELIVRE,
+						"doc_30119.pdf");
+
+				prisma.acte.create("NAI-2026-00984", TypeActe.NAISSANCE, c4, officier,
+						LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 5), "Clinique de Fouda", StatutActe.EN_COURS,
+						null);
+
+				tx.commit();
+				System.out.println(">>> Initialisation terminée avec succès !");
+			} catch (Exception e) {
+				if (tx.isActive())
+					tx.rollback();
+				e.printStackTrace();
+			}
+		} finally {
+			if (em != null && em.isOpen())
+				em.close();
+		}
+	}
 }

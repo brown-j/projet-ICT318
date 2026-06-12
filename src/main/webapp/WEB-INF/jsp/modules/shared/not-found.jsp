@@ -10,7 +10,7 @@
 
     <%-- Messages textuels --%>
     <h1 style="font-size: 22px; font-weight: var(--fw-medium); margin-bottom: var(--space-2); color: var(--text-main)">
-        Fonctionnalité en cours de développement
+        Fonctionnalité ou Ressource non disponible
     </h1>
 
     <p style="color: var(--text-muted); max-width: 420px; margin-bottom: var(--space-5); font-size: var(--text-sm); line-height: 1.6">

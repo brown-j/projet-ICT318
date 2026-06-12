@@ -1,11 +1,7 @@
 // ── Navigation & Breadcrumb Management ────────────────────
 function initNavigation() {
     const breadcrumbCurrent = document.getElementById("breadcrumbCurrent");
-
-    // Au chargement, récupération du dernier menu cliqué (par défaut: "Tableau de bord")
     const activeMenuTitle = sessionStorage.getItem("activeMenuTitle") || "Tableau de bord";
-
-    // Recherche de l'élément correspondant dans la sidebar
     const activeItem = document.querySelector(`.sidebar-nav .nav-item[data-title="${activeMenuTitle}"]`);
 
     if (activeItem) {
@@ -17,7 +13,6 @@ function initNavigation() {
         }
     }
 
-    // Écoute des clics sur les liens de la sidebar pour mémoriser la sélection
     document.querySelectorAll(".sidebar-nav .nav-item").forEach(item => {
         item.addEventListener("click", function () {
             const title = this.getAttribute("data-title");
@@ -37,48 +32,53 @@ function toggleTheme() {
     const icon = document.getElementById('themeIcon');
     if (icon) icon.className = isDark ? 'ti ti-moon' : 'ti ti-sun';
 
-    // On relance avec nos variables globales rafraîchies
     if (typeof initCharts === 'function') {
         initCharts(dashboardBarData, dashboardDoughnutData);
     }
 }
 
 // ── Modal Management ───────────────────────────────────────
-function openModal(name) {
-    const m = document.getElementById('modal-' + name);
-    if (m) {
-        m.style.display = 'flex';
-        m.querySelector('input,select') && m.querySelector('input,select').focus();
+function openModal(id) {
+    const modal = document.getElementById('modal-' + id);
+    if (modal) {
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+
+        // 💡 AUTOMATISATION : Dès qu'une modale s'ouvre, on initialise ses Combobox masquées
+        if (typeof initSearchableSelect === 'function') {
+            modal.querySelectorAll('select[data-searchable="true"]').forEach(select => {
+                initSearchableSelect(select);
+            });
+        }
     }
 }
 
-function closeModal(name) {
-    const m = document.getElementById('modal-' + name);
-    if (m) m.style.display = 'none';
+function closeModal(id) {
+    const modal = document.getElementById('modal-' + id);
+    if (modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
 }
 
-// Variables globales pour ne pas perdre les données au changement de thème
+// Variables globales pour les graphiques
 let dashboardBarData = {};
 let dashboardDoughnutData = [];
 
-// On attend les données en paramètre maintenant
 function initChartsServer(donneesDuServeur) {
     dashboardBarData = donneesDuServeur;
-
-    // Extraction des pourcentages
     if (dashboardBarData.repartitionTypes) {
         dashboardDoughnutData = dashboardBarData.repartitionTypes.map(item => item.percentage);
     }
-
     if (typeof initCharts === 'function') {
         initCharts(dashboardBarData, dashboardDoughnutData);
     }
 }
 
-
 function saveForm() {
     const modals = document.querySelectorAll('.modal-backdrop');
-    modals.forEach(m => m.style.display = 'none');
+    modals.forEach(m => m.classList.remove('show'));
+    document.body.style.overflow = 'auto';
     showToast('Enregistrement réussi !', 'success');
 }
 
@@ -107,22 +107,48 @@ function showToast(msg, type = 'info') {
     setTimeout(() => t.remove(), 3800);
 }
 
+// ── Document Ready ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialisation de la navigation
     initNavigation();
 
-    // ── Modals Listeners ──────────────────────────────────
-    // Close modal when clicking outside
+    // Fermeture des modales au clic extérieur
     document.querySelectorAll('.modal-backdrop').forEach(m => {
         m.addEventListener('click', e => {
-            if (e.target === m) m.style.display = 'none';
+            if (e.target === m) {
+                m.classList.remove('show');
+                document.body.style.overflow = 'auto';
+            }
         });
     });
 
-    // Close modal on ESC key
+    // Fermeture des modales avec la touche Échap
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
-            document.querySelectorAll('.modal-backdrop').forEach(m => m.style.display = 'none');
+            document.querySelectorAll('.modal-backdrop').forEach(m => {
+                m.classList.remove('show');
+            });
+            document.body.style.overflow = 'auto';
         }
     });
+
+    // Gestion de la surbrillance des lignes de tableau
+    document.addEventListener('click', (e) => {
+        const clickedRow = e.target.closest('.table-wrapper tbody tr');
+        if (!clickedRow) return;
+
+        const parentTbody = clickedRow.closest('tbody');
+        const allRows = parentTbody.querySelectorAll('tr');
+        allRows.forEach(row => row.classList.remove('row-selected'));
+
+        clickedRow.classList.add('row-selected');
+    });
+
+    // 💡 CORRECTION DU RECHERCHE RAPIDE : Approche 100% Générique
+    // On ne cible plus aucun ID. On scanne la page à la recherche de n'importe quel 
+    // select marqué "data-searchable" et on lui passe l'élément DOM complet.
+    if (typeof initSearchableSelect === 'function') {
+        document.querySelectorAll('select[data-searchable="true"]').forEach(select => {
+            initSearchableSelect(select);
+        });
+    }
 });

@@ -1,6 +1,6 @@
 package com.app.model.viewmodel;
 
-import com.app.model.jpa.DemandeAdministrative;
+import com.app.jpa.model.DemandeAdministrative;
 import com.app.model.theme.ThemeColor;
 import java.time.format.DateTimeFormatter;
 

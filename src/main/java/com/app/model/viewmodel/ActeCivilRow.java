@@ -1,6 +1,6 @@
 package com.app.model.viewmodel;
 
-import com.app.model.jpa.ActeEtatCivil;
+import com.app.jpa.model.ActeEtatCivil;
 import com.app.model.theme.ThemeColor;
 import java.time.format.DateTimeFormatter;
 

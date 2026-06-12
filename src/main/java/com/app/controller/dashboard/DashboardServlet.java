@@ -12,12 +12,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.app.jpa.model.Citoyen;
+import com.app.jpa.model.DemandeAdministrative;
+import com.app.jpa.model.JournalAudit;
+import com.app.jpa.model.JPAEnum.StatutDemande;
+import com.app.jpa.model.JPAEnum.TypeDemande;
 import com.app.model.icon.Icons;
-import com.app.model.jpa.Citoyen;
-import com.app.model.jpa.DemandeAdministrative;
-import com.app.model.jpa.JournalAudit;
-import com.app.model.jpa.TypeDemande;
-import com.app.model.jpa.enums.StatutDemande;
 import com.app.model.theme.ThemeColor;
 import com.app.model.viewmodel.KpiData;
 import com.app.model.viewmodel.EvolutionActesData;
@@ -58,15 +58,18 @@ public class DashboardServlet extends HttpServlet {
 
 		// 3. Demandes Récentes (Mockées)
 		List<DemandeAdministrative> rawDemandes = Arrays.asList(
-				createMockDemande("DEM-2026-0089", "Cert. de résidence", "Amina", "Fouda", StatutDemande.EN_COURS,
+				createMockDemande("DEM-2026-0089", TypeDemande.CERTIFICAT_COUTUME, "Amina", "Fouda",
+						StatutDemande.EN_COURS,
 						LocalDateTime.now().minusHours(2)),
-				createMockDemande("DEM-2026-0088", "Acte de naissance", "Jean-Paul", "Mbarga", StatutDemande.SOUMISE,
+				createMockDemande("DEM-2026-0088", TypeDemande.ACTE_NAISSANCE, "Jean-Paul", "Mbarga",
+						StatutDemande.SOUMISE,
 						LocalDateTime.now().minusHours(4)),
-				createMockDemande("DEM-2026-0087", "Autorisation construire", "Société", "BTP Cam",
+				createMockDemande("DEM-2026-0087", TypeDemande.AUTORISATION_CONSTRUIRE, "Société", "BTP Cam",
 						StatutDemande.REJETEE, LocalDateTime.now().minusDays(1)),
-				createMockDemande("DEM-2026-0086", "Legalisation signature", "Paul", "Essama", StatutDemande.VALIDEE,
+				createMockDemande("DEM-2026-0086", TypeDemande.ACTE_NAISSANCE, "Paul", "Essama", StatutDemande.VALIDEE,
 						LocalDateTime.now().minusDays(1)),
-				createMockDemande("DEM-2026-0085", "Extrait naissance", "Odile", "Biyong", StatutDemande.CLOTUREE,
+				createMockDemande("DEM-2026-0085", TypeDemande.LEGALISTION_SIGNATURE, "Odile", "Biyong",
+						StatutDemande.CLOTUREE,
 						LocalDateTime.now().minusDays(2)));
 		// Transformation stricte des entités brutes en ViewModels "stupides"
 		List<DemandeData> recentDemandesList = rawDemandes.stream()
@@ -98,11 +101,8 @@ public class DashboardServlet extends HttpServlet {
 	/**
 	 * Méthode utilitaire pour générer de fausses entités JPA rapidement
 	 */
-	private DemandeAdministrative createMockDemande(String numero, String libelleType, String prenom, String nom,
+	private DemandeAdministrative createMockDemande(String numero, TypeDemande type, String prenom, String nom,
 			StatutDemande statut, LocalDateTime dateSoumission) {
-		TypeDemande type = new TypeDemande();
-		type.setLibelle(libelleType);
-
 		Citoyen citoyen = new Citoyen();
 		citoyen.setPrenom(prenom);
 		citoyen.setNom(nom);

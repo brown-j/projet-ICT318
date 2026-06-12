@@ -1,7 +1,7 @@
 package com.app.model.viewmodel;
 
-import com.app.model.jpa.JournalAudit;
 import com.app.model.theme.ThemeColor;
+import com.app.jpa.model.JournalAudit;
 import com.app.model.icon.Icons;
 
 import java.time.format.DateTimeFormatter;

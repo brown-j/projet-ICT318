@@ -1170,6 +1170,52 @@ select.form-control {
   color: var(--text-secondary);
 }
 
+/* ── AUTOCOMPLETE / SEARCHABLE SELECT ──────────────── */
+.searchable-select-container {
+  position: relative;
+  width: 100%;
+}
+
+.search-dropdown-wrapper {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 220px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-default, #ccc);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: var(--shadow-lg);
+  z-index: 9999;
+  overflow-y: auto;
+  display: none;
+}
+
+.search-dropdown-wrapper.open {
+  display: block;
+}
+
+.search-dropdown-item {
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  cursor: pointer;
+  font-size: var(--text-sm, 13px);
+  color: var(--text-default);
+  transition: background 0.15s ease;
+}
+
+.search-dropdown-item:hover,
+.search-dropdown-item.selected {
+  background-color: rgba(var(--c-primary-rgb, 59, 130, 246), 0.1);
+  color: var(--c-primary-600);
+}
+
+.search-dropdown-no-results {
+  padding: 8px 12px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+  font-size: 13px;
+}
+
 /* ── 12. BADGES & TAGS ────────────────────────────────────── */
 .badge {
   display: inline-flex;
@@ -1324,6 +1370,20 @@ select.form-control {
 }
 
 /* ── 14. TABLE ────────────────────────────────────────────── */
+/* ── SURLIGNAGE DE LIGNE (FOCUS) ────────────────────────────── */
+.table-wrapper tbody tr {
+  cursor: pointer;
+  /* Indique à l'utilisateur que la ligne est cliquable */
+  transition: background-color 0.2s ease;
+}
+
+.table-wrapper tbody tr.row-selected {
+  /* Utilise la couleur primaire de ton thème avec une forte transparence */
+  background-color: rgba(var(--c-primary-rgb, 59, 130, 246), 0.1) !important;
+  /* Optionnel : Une petite bordure à gauche pour bien marquer la sélection */
+  box-shadow: inset 3px 0 0 0 var(--c-primary-500, #3b82f6);
+}
+
 .table-wrapper {
   overflow-x: auto;
   border-radius: var(--radius-lg);
@@ -1511,10 +1571,14 @@ tbody tr:hover td {
   inset: 0;
   background: var(--bg-overlay);
   z-index: var(--z-modal);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
+}
+
+.modal-backdrop.show {
+  display: flex !important;
 }
 
 .modal {
