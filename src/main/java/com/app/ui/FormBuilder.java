@@ -27,7 +27,7 @@ public class FormBuilder {
 
     public static class FormContainer {
         private String action;
-        private String method = "POST";
+        // private String method = "POST";
         private List<FormRow> rows = new ArrayList<>();
         private boolean isReadOnly = false;
         private boolean isMultipart = false;

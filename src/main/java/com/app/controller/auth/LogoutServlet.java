@@ -21,7 +21,7 @@ public class LogoutServlet extends HttpServlet {
 
         if (session != null) {
             // 💡 Détruit complètement la session et toutes ses variables (dont
-            // utilisateurConnecte)
+            // user)
             session.invalidate();
         }
 

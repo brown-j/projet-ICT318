@@ -17,7 +17,6 @@ import com.app.jpa.config.JPAConfig;
 import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.OfficierEtatCivil;
 import com.app.jpa.model.JPAEnum.Role;
-import com.app.jpa.model.JPAEnum.StatutOfficier;
 import com.app.model.viewmodel.OfficierRow;
 import com.app.ui.OfficierFormFactory;
 
@@ -85,7 +84,24 @@ public class OfficierListeServlet extends HttpServlet {
                     officierPourFormulaire,
                     actionUrl,
                     isReadOnly);
-            request.setAttribute("formulaireHtml", formHtml);
+
+            // 🌟 NOUVEAU : Logique de la Modale Globale Centralisée 🌟
+            String modalTitle;
+            if (isReadOnly) {
+                modalTitle = "Détails du compte : " + (officierPourFormulaire.getNom() != null
+                        ? officierPourFormulaire.getNom() + " "
+                                + (officierPourFormulaire.getPrenom() != null ? officierPourFormulaire.getPrenom() : "")
+                        : "");
+            } else if (officierPourFormulaire.getId() != null) {
+                modalTitle = "Modifier le compte : " + officierPourFormulaire.getNom() + " "
+                        + (officierPourFormulaire.getPrenom() != null ? officierPourFormulaire.getPrenom() : "");
+            } else {
+                modalTitle = "Ajouter un membre du personnel";
+            }
+
+            // Injection des variables pour le réceptacle dans base-layout.jsp
+            request.setAttribute("modalTitle", modalTitle);
+            request.setAttribute("modalContent", formHtml);
 
             // 4. Routage vers le layout maître
             request.setAttribute("view", "/WEB-INF/jsp/modules/officier/liste-officier.jsp");

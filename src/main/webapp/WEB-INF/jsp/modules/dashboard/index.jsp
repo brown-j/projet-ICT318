@@ -1,22 +1,28 @@
 <%-- Dashboard View: KPIs and Key Metrics --%>
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
-<%-- Directive pour activer la JSTL --%>
+<%-- Directives pour activer la JSTL --%>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+
+<%-- Instanciation de la date actuelle et forçage de la langue en français --%>
+<jsp:useBean id="now" class="java.util.Date" />
+<fmt:setLocale value="fr_FR" />
 
 <link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/dashboard.css">
 
 <div class="page-header">
   <div class="page-header-left">
     <h1>Tableau de bord</h1>
-    <p>Lundi 2 juin 2025 — Vue d'ensemble de la commune</p>
+    <%-- Date formatée dynamiquement (ex: lundi 13 juin 2026) --%>
+    <p style="text-transform: capitalize;"><fmt:formatDate value="${now}" pattern="EEEE d MMMM yyyy" /> — Vue d'ensemble de la commune</p>
   </div>
   <div class="page-header-actions">
     <button class="btn btn-ghost btn-sm" onclick="showToast('Rapport exporté','success')">
       <i class="ti ti-download" aria-hidden="true"></i> Exporter
     </button>
-    <button class="btn btn-primary btn-sm" onclick="openModal('citoyen')">
-      <i class="ti ti-plus" aria-hidden="true"></i> Nouveau citoyen
-    </button>
+    <a href="${pageContext.request.contextPath}/citoyen/liste?mode=create" class="btn btn-primary btn-sm">
+      <i class="ti ti-plus"></i> Nouveau Citoyen
+    </a>
   </div>
 </div>
 
@@ -41,7 +47,8 @@
       <div style="display:flex;gap:8px;align-items:center">
         <span class="tag tag-teal"><i class="ti ti-point-filled" style="font-size:10px" aria-hidden="true"></i>
           Actes</span>
-          <span class="badge badge-neutral" style="font-size:10px">2025</span>
+          <%-- Année dynamique --%>
+          <span class="badge badge-neutral" style="font-size:10px"><fmt:formatDate value="${now}" pattern="yyyy" /></span>
         </div>
       </div>
       <div class="chart-wrap">
@@ -118,19 +125,20 @@
           <div class="card-title">Actions rapides</div>
         </div>
         <div class="grid gap-3" style="grid-template-columns:repeat(4,1fr)">
-          <a class="quick-action" href="#" onclick="openModal('citoyen');return false">
+          <%-- Harmonisation des modes de création --%>
+          <a class="quick-action" href="${pageContext.request.contextPath}/citoyen/liste?mode=create" >
             <i class="ti ti-user-plus" style="color:var(--color-primary)" aria-hidden="true"></i>
             <span>Nouveau citoyen</span>
           </a>
-          <a class="quick-action" href="#" onclick="openModal('acte');return false">
+          <a class="quick-action" href="${pageContext.request.contextPath}/acte/liste?mode=create" >
             <i class="ti ti-file-plus" style="color:var(--color-secondary)" aria-hidden="true"></i>
             <span>Créer acte</span>
           </a>
-          <a class="quick-action" href="#" onclick="showToast('Caisse ouverte','info');return false">
+          <a class="quick-action" href="${pageContext.request.contextPath}/paiement/liste?mode=create" >
             <i class="ti ti-cash" style="color:var(--color-accent)" aria-hidden="true"></i>
             <span>Encaisser</span>
           </a>
-          <a class="quick-action" href="#" onclick="showToast('RDV planifié','success');return false">
+          <a class="quick-action" href="${pageContext.request.contextPath}/agenda/rendez-vous?mode=create">
             <i class="ti ti-calendar-plus" style="color:var(--c-info-600)" aria-hidden="true"></i>
             <span>Rendez-vous</span>
           </a>
@@ -178,6 +186,8 @@
           const serverData = JSON.parse('${not empty evolutionDataJson ? evolutionDataJson : "{}"}');
           
           // 2. On lance la fonction de notre fichier externe
-          initChartsServer(serverData);
+          if (typeof initChartsServer === 'function') {
+            initChartsServer(serverData);
+          }
         });
       </script>

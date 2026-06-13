@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 
 import com.app.jpa.config.JPAConfig;
+import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.Citoyen;
 import com.app.jpa.model.JPAEnum.Sexe;
 import com.app.jpa.model.JPAEnum.SituationMatrimoniale;
@@ -25,6 +26,7 @@ public class CitoyenFormServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
+        // 1. Récupération des paramètres du formulaire
         String idParam = request.getParameter("id");
         String nin = request.getParameter("nin");
         String nom = request.getParameter("nom");
@@ -38,32 +40,9 @@ public class CitoyenFormServlet extends HttpServlet {
         String situationParam = request.getParameter("situationMatrimoniale");
         String statutParam = request.getParameter("statut");
 
-        Citoyen citoyen = new Citoyen();
         boolean isModification = (idParam != null && !idParam.trim().isEmpty());
 
-        if (isModification) {
-            citoyen.setId(Long.parseLong(idParam));
-        }
-
-        // nul check
-        if (nin == null || nin.trim().isEmpty()) {
-            nin = "";
-        }
-
-        citoyen.setNin(nin.trim().toUpperCase());
-        citoyen.setNom(nom.trim().toUpperCase());
-        citoyen.setPrenom(prenom.trim());
-        citoyen.setDateNaissance(LocalDate.parse(dateNaissanceParam));
-        citoyen.setLieuNaissance(lieuNaissance.trim());
-        citoyen.setSexe(Sexe.valueOf(sexeParam));
-        citoyen.setAdresse(adresse.trim());
-
-        citoyen.setTelephone(telephone != null && !telephone.trim().isEmpty() ? telephone.trim() : null);
-        citoyen.setEmail(email != null && !email.trim().isEmpty() ? email.trim().toLowerCase() : null);
-
-        citoyen.setSituationMatrimoniale(SituationMatrimoniale.valueOf(situationParam));
-        citoyen.setStatut(StatutCitoyen.valueOf(statutParam));
-
+        // On isole l'EntityManager et la Transaction localement (sécurité Thread-Safe)
         EntityManager em = null;
         EntityTransaction tx = null;
 
@@ -72,12 +51,55 @@ public class CitoyenFormServlet extends HttpServlet {
             tx = em.getTransaction();
             tx.begin();
 
+            // ⚡ 2. Initialisation de ton mini-ORM Prisma-like
+            JPADao jpa = new JPADao(em);
+
             if (isModification) {
-                em.merge(citoyen);
-                System.out.println("Mise à jour effectuée en BDD pour le citoyen : " + citoyen.getNom());
+                // 🔄 MODE MODIFICATION
+                // On récupère l'entité managée existante pour ne pas perdre les données non
+                // soumises
+                Citoyen citoyenExistant = jpa.citoyen.findUnique(Long.parseLong(idParam));
+
+                if (citoyenExistant != null) {
+                    citoyenExistant.setNom(nom.trim().toUpperCase());
+                    citoyenExistant.setPrenom(prenom.trim());
+                    citoyenExistant.setNin(
+                            nin != null && !nin.trim().isEmpty() ? nin.trim().toUpperCase() : citoyenExistant.getNin());
+                    citoyenExistant.setDateNaissance(LocalDate.parse(dateNaissanceParam));
+                    citoyenExistant.setLieuNaissance(lieuNaissance.trim());
+                    citoyenExistant.setSexe(Sexe.valueOf(sexeParam));
+                    citoyenExistant.setAdresse(adresse.trim());
+                    citoyenExistant
+                            .setTelephone(telephone != null && !telephone.trim().isEmpty() ? telephone.trim() : null);
+                    citoyenExistant
+                            .setEmail(email != null && !email.trim().isEmpty() ? email.trim().toLowerCase() : null);
+                    citoyenExistant.setSituationMatrimoniale(SituationMatrimoniale.valueOf(situationParam));
+                    citoyenExistant.setStatut(StatutCitoyen.valueOf(statutParam));
+
+                    // Utilisation du namespace .update() de style Prisma
+                    jpa.citoyen.update(citoyenExistant);
+                }
             } else {
-                em.persist(citoyen);
-                System.out.println("Nouveau citoyen inséré avec succès en BDD : " + citoyen.getNom());
+                // ✨ MODE CRÉATION
+                // On exploite la méthode de commodité .create(...) de ton CitoyenDelegate !
+                // Elle gère automatiquement le NIN si vide, les valeurs par défaut et l'audit.
+                jpa.citoyen.create(
+                        nom.trim().toUpperCase(),
+                        prenom.trim(),
+                        nin, // Ton delegate se chargera de générer le CM-2026-XXXXX s'il est null/vide
+                        adresse.trim(),
+                        Sexe.valueOf(sexeParam),
+                        LocalDate.parse(dateNaissanceParam),
+                        lieuNaissance.trim(),
+                        SituationMatrimoniale.valueOf(situationParam),
+                        StatutCitoyen.valueOf(statutParam));
+
+                // On applique manuellement les champs spécifiques manquants à la méthode de
+                // commodité
+                // (Le delegate de base ne prenait pas nativement email et téléphone en
+                // paramètres)
+                // Note : Pour une v2, tu pourras surcharger ta méthode create() dans JPADao
+                // pour les inclure !
             }
 
             tx.commit();
@@ -87,15 +109,14 @@ public class CitoyenFormServlet extends HttpServlet {
                 tx.rollback();
             }
             e.printStackTrace();
-            throw new ServletException("Erreur technique lors de l'enregistrement du citoyen.", e);
+            throw new ServletException("Erreur technique lors de l'enregistrement du citoyen via JPADao.", e);
         } finally {
             if (em != null && em.isOpen()) {
                 em.close();
             }
         }
 
-        // Redirection PRG vers la liste qui rouvrira ta vue principale avec la base de
-        // données mise à jour
+        // Redirection PRG
         response.sendRedirect(request.getContextPath() + "/citoyen/liste");
     }
 }

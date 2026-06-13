@@ -15,6 +15,7 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 
 import com.app.jpa.config.JPAConfig;
+import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.OfficierEtatCivil;
 import com.app.jpa.model.JPAEnum.Role;
 import com.app.jpa.model.JPAEnum.StatutOfficier;
@@ -32,6 +33,7 @@ public class OfficierFormServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
+        // 1. Récupération des paramètres du formulaire
         String idParam = request.getParameter("id");
         String nom = request.getParameter("nom");
         String prenom = request.getParameter("prenom");
@@ -54,37 +56,65 @@ public class OfficierFormServlet extends HttpServlet {
             tx = em.getTransaction();
             tx.begin();
 
+            // Initialisation de ton mini-ORM Prisma-like
+            JPADao jpa = new JPADao(em);
+
+            // Variable qui contiendra notre entité finale (créée ou récupérée) pour le
+            // traitement du fichier
             OfficierEtatCivil officier;
 
             if (isModification) {
-                // 1. Charger l'objet existant directement attaché à la session
-                officier = em.find(OfficierEtatCivil.class, Long.parseLong(idParam));
+                // 🔄 MODE MODIFICATION : On utilise le delegate pour charger l'entité managée
+                officier = jpa.officier.findUnique(Long.parseLong(idParam));
                 if (officier == null) {
                     throw new ServletException("Officier introuvable pour l'ID : " + idParam);
                 }
+
+                // Hydratation des modifications
+                officier.setNom(nom.trim().toUpperCase());
+                officier.setPrenom(prenom.trim());
+                officier.setTitre(titre.trim());
+                officier.setService(service.trim());
+                officier.setMatricule(matricule.trim().toUpperCase());
+                officier.setDatePriseFonction(LocalDate.parse(datePriseFonctionParam));
+                officier.setEmail(email.trim().toLowerCase());
+                officier.setTelephone(telephone != null && !telephone.trim().isEmpty() ? telephone.trim() : null);
+                officier.setRole(Role.valueOf(roleParam));
+                officier.setStatut(StatutOfficier.valueOf(statutParam));
+
+                // Gestion intelligente du mot de passe en modification (uniquement si modifié)
+                if (motDePasse != null && !motDePasse.trim().isEmpty()) {
+                    officier.setMotDePasse(HashUtil.hashPassword(motDePasse.trim()));
+                }
+
+                // Mise à jour via le delegate parent (déclenche la validation réflexive et
+                // l'audit)
+                jpa.officier.update(officier);
+
             } else {
-                // Créer une nouvelle instance si c'est une insertion
-                officier = new OfficierEtatCivil();
+                // ✨ MODE CRÉATION : On délègue tout à la méthode métier blindée de ton Delegate
+                // Elle valide l'unicité du mot de passe, l'absence d'un second super-admin et
+                // hache le mot de passe.
+                officier = jpa.officier.create(
+                        matricule,
+                        nom.trim().toUpperCase(),
+                        prenom.trim(),
+                        telephone,
+                        titre.trim(),
+                        service.trim(),
+                        email.trim().toLowerCase(),
+                        motDePasse, // Passé en clair, ton delegate s'occupe du hachage !
+                        LocalDate.parse(datePriseFonctionParam),
+                        Role.valueOf(roleParam));
+
+                // On applique manuellement le statut puisque ton delegate.create() l'omettait
+                if (statutParam != null) {
+                    officier.setStatut(StatutOfficier.valueOf(statutParam));
+                }
             }
 
-            // 2. Hydratation / Mise à jour des champs communs
-            officier.setNom(nom.trim().toUpperCase());
-            officier.setPrenom(prenom.trim());
-            officier.setTitre(titre.trim());
-            officier.setService(service.trim());
-            officier.setMatricule(matricule.trim().toUpperCase());
-            officier.setDatePriseFonction(LocalDate.parse(datePriseFonctionParam));
-            officier.setEmail(email.trim().toLowerCase());
-            officier.setTelephone(telephone != null && !telephone.trim().isEmpty() ? telephone.trim() : null);
-            officier.setRole(Role.valueOf(roleParam));
-            officier.setStatut(StatutOfficier.valueOf(statutParam));
-
-            // 3. Gestion intelligente du mot de passe (uniquement si saisi)
-            if (motDePasse != null && !motDePasse.trim().isEmpty()) {
-                officier.setMotDePasse(HashUtil.hashPassword(motDePasse.trim()));
-            }
-
-            // 4. Traitement du fichier de signature numérique
+            // 4. Traitement du fichier de signature numérique (Commun à la création et
+            // modification)
             Part filePart = request.getPart("signatureFile");
             if (filePart != null && filePart.getSize() > 0) {
                 String fileName = Paths.get(filePart.getSubmittedFileName()).getFileName().toString();
@@ -92,16 +122,13 @@ public class OfficierFormServlet extends HttpServlet {
                 String uniqueImageName = "sig_" + officier.getMatricule() + "_" + System.currentTimeMillis()
                         + extension;
                 officier.setSignatureNumerique(uniqueImageName);
-            }
 
-            // 5. Persistance ou synchronisation automatique
-            if (isModification) {
-                // Pas besoin de em.merge() explicite car l'objet est managé,
-                // Hibernate détecte les changements lors du commit.
-                System.out.println("Mise à jour effectuée en BDD pour l'officier : " + officier.getNom());
-            } else {
-                em.persist(officier);
-                System.out.println("Nouvel officier inséré avec succès en BDD : " + officier.getNom());
+                // Si on vient de le créer et qu'on modifie un champ post-persist (le nom du
+                // fichier),
+                // l'update garantit la bonne synchronisation de l'état.
+                if (!isModification) {
+                    jpa.officier.update(officier);
+                }
             }
 
             tx.commit();
@@ -111,15 +138,15 @@ public class OfficierFormServlet extends HttpServlet {
                 tx.rollback();
             }
             e.printStackTrace();
-            throw new ServletException("Erreur technique lors de l'enregistrement de l'officier.", e);
+            throw new ServletException("Erreur lors de l'enregistrement de l'officier via JPADao : " + e.getMessage(),
+                    e);
         } finally {
             if (em != null && em.isOpen()) {
                 em.close();
             }
         }
 
-        // Redirection PRG (Post-Redirect-Get) vers la liste
+        // Redirection PRG (Post-Redirect-Get)
         response.sendRedirect(request.getContextPath() + "/officier/liste");
     }
-
 }

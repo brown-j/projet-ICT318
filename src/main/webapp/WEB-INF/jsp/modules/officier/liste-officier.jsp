@@ -82,24 +82,6 @@
     </div>
 </div>
 
-<%-- ========================================================= --%>
-<%-- MODALE D'ENREGISTREMENT / MODIFICATION D'OFFICIER         --%>
-<%-- ========================================================= --%>
-<div class="modal-backdrop ${autoOpenModal ? 'show' : ''}" id="modal-officier" role="dialog" aria-modal="true">
-    <div class="modal">
-        <div class="modal-header">
-            <h2 class="modal-title" style="font-size:var(--text-xl)">Habilitation & Profil Utilisateur</h2>
-            <button class="icon-btn" onclick="closeModal('officier')" aria-label="Fermer">
-                <i class="ti ti-x" aria-hidden="true"></i>
-            </button>
-        </div>
-
-        <%-- Injection propre du formulaire généré par la Factory --%>
-        ${formulaireHtml}
-
-    </div>
-</div>
-
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         // Sécurisation Null-Safe du JSON via Expression Language JSP

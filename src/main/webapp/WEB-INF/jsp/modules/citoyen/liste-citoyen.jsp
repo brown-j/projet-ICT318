@@ -81,25 +81,6 @@
   </div>
 </div>
 
-<%-- ========================================================= --%>
-<%-- MODALE D'ENREGISTREMENT / MODIFICATION DE CITOYEN        --%>
-<%-- ========================================================= --%>
-<%-- 💡 CORRECTION : Suppression du style="display:none" qui entrait en conflit avec la classe utilitaire ".show" --%>
-<div class="modal-backdrop ${autoOpenModal ? 'show' : ''}" id="modal-citoyen" role="dialog" aria-modal="true">
-  <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title" style="font-size:var(--text-xl)">Fiche d'identité citoyenne</h2>
-      <button class="icon-btn" onclick="closeModal('citoyen')" aria-label="Fermer">
-        <i class="ti ti-x" aria-hidden="true"></i>
-      </button>
-    </div>
-
-    <%-- Injection propre du formulaire généré par la Factory --%>
-    ${formulaireHtml}
-
-  </div>
-</div>
-
 <script>
   document.addEventListener("DOMContentLoaded", () => {
     // 💡 CORRECTION : Sécurisation Null-Safe du JSON via Expression Language JSP

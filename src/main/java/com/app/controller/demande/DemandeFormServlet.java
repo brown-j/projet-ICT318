@@ -4,9 +4,11 @@ import com.app.jpa.config.JPAConfig;
 import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.Citoyen;
 import com.app.jpa.model.DemandeAdministrative;
+import com.app.jpa.model.JPAEnum.ModePaiement;
 import com.app.jpa.model.JPAEnum.PrioriteDemande;
 import com.app.jpa.model.JPAEnum.StatutDemande;
 import com.app.jpa.model.JPAEnum.TypeDemande;
+import com.app.jpa.model.OfficierEtatCivil;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
@@ -36,7 +38,7 @@ public class DemandeFormServlet extends HttpServlet {
 
             // 1. Récupération des paramètres du formulaire
             String idStr = request.getParameter("id");
-            String statutStr = request.getParameter("statut"); // L'action est dictée par le statut choisi
+            String statutStr = request.getParameter("statut");
             String typeDemandeStr = request.getParameter("typeDemande");
             String idCitoyenStr = request.getParameter("idCitoyenPrincipal");
             String prioriteStr = request.getParameter("priorite");
@@ -49,8 +51,6 @@ public class DemandeFormServlet extends HttpServlet {
                 PrioriteDemande priorite = prioriteStr != null ? PrioriteDemande.valueOf(prioriteStr) : null;
                 Citoyen requerant = idCitoyenStr != null ? dao.citoyen.findUnique(Long.parseLong(idCitoyenStr)) : null;
 
-                // Création via le DAO (Le numéro de suivi est généré à l'intérieur en passant
-                // null)
                 dao.demande.create(
                         null,
                         type,
@@ -59,7 +59,10 @@ public class DemandeFormServlet extends HttpServlet {
                         StatutDemande.SOUMISE,
                         priorite,
                         documentFinal);
-                request.getSession().setAttribute("successMsg", "Demande créée avec succès.");
+
+                // Adaptation pour le Toast
+                request.getSession().setAttribute("toastMsg", "Demande créée avec succès.");
+                request.getSession().setAttribute("toastType", "success");
 
             }
             // 3. MODE MISE À JOUR & CHANGEMENT D'ÉTAT (ID existant)
@@ -68,7 +71,6 @@ public class DemandeFormServlet extends HttpServlet {
                 DemandeAdministrative demande = dao.demande.findUnique(id);
 
                 if (demande != null) {
-                    // a) Mise à jour des champs basiques
                     if (typeDemandeStr != null)
                         demande.setTypeDemande(TypeDemande.valueOf(typeDemandeStr));
                     if (prioriteStr != null)
@@ -78,11 +80,9 @@ public class DemandeFormServlet extends HttpServlet {
                     if (documentFinal != null && !documentFinal.trim().isEmpty())
                         demande.setDocumentFinal(documentFinal.trim());
 
-                    // b) Vérification et application du changement d'état
                     if (statutStr != null && !statutStr.isEmpty()) {
                         StatutDemande nouveauStatut = StatutDemande.valueOf(statutStr);
 
-                        // Si le statut a changé, on déclenche les règles métier du DAO
                         if (demande.getStatut() != nouveauStatut) {
                             switch (nouveauStatut) {
                                 case EN_COURS:
@@ -95,47 +95,60 @@ public class DemandeFormServlet extends HttpServlet {
                                     dao.demande.rejeter(demande);
                                     break;
                                 case CLOTUREE:
-                                    dao.demande.cloturer(demande, demande.getDocumentFinal());
+                                    OfficierEtatCivil officierConnecte = (OfficierEtatCivil) request.getSession()
+                                            .getAttribute("user");
+
+                                    dao.demande.cloturer(
+                                            demande,
+                                            documentFinal,
+                                            officierConnecte,
+                                            ModePaiement.ESPECES);
                                     break;
                                 default:
-                                    // Fallback sécurisé (ex: on la remet SOUMISE)
                                     demande.setStatut(nouveauStatut);
                                     dao.demande.update(demande);
                             }
-                            request.getSession().setAttribute("successMsg",
+
+                            // Adaptation pour le Toast
+                            request.getSession().setAttribute("toastMsg",
                                     "Demande mise à jour et statut passé à " + nouveauStatut.name());
+                            request.getSession().setAttribute("toastType", "success");
                         } else {
-                            // Le statut n'a pas changé, simple mise à jour des autres champs
                             dao.demande.update(demande);
-                            request.getSession().setAttribute("successMsg", "Informations de la demande mises à jour.");
+                            request.getSession().setAttribute("toastMsg", "Informations de la demande mises à jour.");
+                            request.getSession().setAttribute("toastType", "success");
                         }
                     } else {
                         dao.demande.update(demande);
+                        request.getSession().setAttribute("toastMsg", "Informations mises à jour.");
+                        request.getSession().setAttribute("toastType", "success");
                     }
                 } else {
-                    request.getSession().setAttribute("errorMsg", "Erreur : Demande introuvable.");
+                    request.getSession().setAttribute("toastMsg", "Erreur : Demande introuvable.");
+                    request.getSession().setAttribute("toastType", "error");
                 }
             }
 
             tx.commit();
         } catch (IllegalStateException e) {
-            // Capture des erreurs de logique métier du DAO (Ex: "Impossible de valider une
-            // demande rejetée")
             if (tx.isActive())
                 tx.rollback();
-            request.getSession().setAttribute("errorMsg", e.getMessage());
+            // Capture des erreurs de logique métier (ex: Clôture d'une demande non validée)
+            request.getSession().setAttribute("toastMsg", e.getMessage());
+            request.getSession().setAttribute("toastType", "warning"); // warning ou error selon ton envie
         } catch (Exception e) {
-            // Capture des autres erreurs (Base de données, NullPointer, etc.)
             if (tx.isActive())
                 tx.rollback();
             e.printStackTrace();
-            request.getSession().setAttribute("errorMsg", "Une erreur technique est survenue.");
+            // Capture des crashs techniques
+            request.getSession().setAttribute("toastMsg", "Une erreur technique est survenue.");
+            request.getSession().setAttribute("toastType", "error");
         } finally {
             if (em.isOpen())
                 em.close();
         }
 
-        // 4. Redirection PRG (Post-Redirect-Get) vers la liste
+        // 4. Redirection PRG (Post-Redirect-Get)
         response.sendRedirect(request.getContextPath() + "/demande/liste");
     }
 }

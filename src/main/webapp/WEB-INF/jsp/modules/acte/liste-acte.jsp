@@ -78,25 +78,7 @@
     <span id="acte-pagination-info" style="font-size:var(--text-sm);color:var(--text-muted)"></span>
     <div id="acte-pagination-buttons" style="display:flex;gap:6px"></div>
   </div>
-</div>
-
-<%-- ================================================================= --%>
-<%-- MODALE D'ENREGISTREMENT ET MODIFICATION D'ACTE (Formulaire inclus)--%>
-<%-- ================================================================= --%>
-<div class="modal-backdrop ${autoOpenModal ? 'show' : ''}" id="modal-acte-civil" role="dialog" aria-modal="true">
-  <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title" style="font-size:var(--text-xl)">Dresser / Modifier un acte civil</h2>
-      <button class="icon-btn" onclick="closeModal('acte-civil')" aria-label="Fermer">
-        <i class="ti ti-x" aria-hidden="true"></i>
-      </button>
-    </div>
-
-    <%-- Injection propre du formulaire généré --%>
-    ${formulaireHtml}
-
-  </div>
-</div>
+</div>s
 
 <script>
   document.addEventListener("DOMContentLoaded", () => {

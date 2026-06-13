@@ -1,5 +1,6 @@
 package com.app.controller.dashboard;
 
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -7,22 +8,26 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.app.jpa.model.Citoyen;
+import com.app.jpa.config.JPAConfig;
+import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.DemandeAdministrative;
 import com.app.jpa.model.JournalAudit;
+import com.app.jpa.model.Citoyen; // NOUVEAU : Import du modèle Citoyen
+import com.app.jpa.model.JPAEnum.PrioriteDemande;
 import com.app.jpa.model.JPAEnum.StatutDemande;
-import com.app.jpa.model.JPAEnum.TypeDemande;
+import com.app.jpa.model.JPAEnum.TypeActe;
 import com.app.model.icon.Icons;
 import com.app.model.theme.ThemeColor;
 import com.app.model.viewmodel.KpiData;
 import com.app.model.viewmodel.EvolutionActesData;
 import com.app.model.viewmodel.ActiviteData;
 import com.app.model.viewmodel.DemandeData;
+import com.app.ui.CitoyenFormFactory; // NOUVEAU : Import de la Factory (à adapter si besoin)
 import com.google.gson.Gson;
 
 @WebServlet("/dashboard")
@@ -32,98 +37,95 @@ public class DashboardServlet extends HttpServlet {
 	@Override
 	protected void doGet(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		// Sérialiseur json
+
+		EntityManager em = JPAConfig.getEntityManager();
+		JPADao dao = new JPADao(em);
 		Gson gson = new Gson();
 
-		// 1. KPIs (Existant)
-		List<KpiData> kpis = List.of(
-				new KpiData(ThemeColor.PRIMARY, Icons.USERS.toString(), "1 284", "Citoyens enregistrés", true,
-						"+34 ce mois"),
-				new KpiData(ThemeColor.SECONDARY, Icons.FILE_CERTIFICATE.toString(), "47", "Actes ce mois", true,
-						"+12% vs N-1"),
-				new KpiData(ThemeColor.ACCENT, Icons.CLIPBOARD_LIST.toString(), "12", "Demandes en attente", false,
-						"3 urgentes"),
-				new KpiData(ThemeColor.SUCCESS, Icons.CURRENCY_FRANC.toString(), "842 K", "Recettes FCFA (mois)", true,
-						"+8% objectif"));
-		request.setAttribute("kpis", kpis);
+		try {
+			// --- Préparation des dates ---
+			// 1. Pour les requêtes nécessitant Date + Heure (Citoyen, Paiement, etc.)
+			LocalDateTime debutMoisDateTime = java.time.LocalDate.now().withDayOfMonth(1).atStartOfDay();
+			LocalDateTime finMoisDateTime = java.time.LocalDate.now().plusMonths(1).withDayOfMonth(1).atStartOfDay();
 
-		// 2. Évolution des actes (Graphique en barres)
-		List<Integer> naissances = Arrays.asList(14, 18, 12, 16, 20, 15, 17, 13, 19, 22, 16, 18);
-		List<Integer> mariages = Arrays.asList(8, 10, 6, 9, 12, 8, 11, 7, 10, 14, 9, 11);
-		List<Integer> deces = Arrays.asList(5, 4, 7, 5, 6, 8, 5, 6, 4, 7, 5, 4);
+			// 2. Pour les requêtes nécessitant UNIQUEMENT la Date (ActeEtatCivil)
+			LocalDate debutMoisDateOnly = java.time.LocalDate.now().withDayOfMonth(1);
 
-		EvolutionActesData evolutionData = new EvolutionActesData(naissances, mariages, deces);
-		request.setAttribute("evolutionDataJson", gson.toJson(evolutionData));
-		request.setAttribute("repartitionTypes", evolutionData.getRepartitionTypes());
+			int anneeEnCours = java.time.LocalDate.now().getYear();
 
-		// 3. Demandes Récentes (Mockées)
-		List<DemandeAdministrative> rawDemandes = Arrays.asList(
-				createMockDemande("DEM-2026-0089", TypeDemande.CERTIFICAT_COUTUME, "Amina", "Fouda",
-						StatutDemande.EN_COURS,
-						LocalDateTime.now().minusHours(2)),
-				createMockDemande("DEM-2026-0088", TypeDemande.ACTE_NAISSANCE, "Jean-Paul", "Mbarga",
-						StatutDemande.SOUMISE,
-						LocalDateTime.now().minusHours(4)),
-				createMockDemande("DEM-2026-0087", TypeDemande.AUTORISATION_CONSTRUIRE, "Société", "BTP Cam",
-						StatutDemande.REJETEE, LocalDateTime.now().minusDays(1)),
-				createMockDemande("DEM-2026-0086", TypeDemande.ACTE_NAISSANCE, "Paul", "Essama", StatutDemande.VALIDEE,
-						LocalDateTime.now().minusDays(1)),
-				createMockDemande("DEM-2026-0085", TypeDemande.LEGALISTION_SIGNATURE, "Odile", "Biyong",
-						StatutDemande.CLOTUREE,
-						LocalDateTime.now().minusDays(2)));
-		// Transformation stricte des entités brutes en ViewModels "stupides"
-		List<DemandeData> recentDemandesList = rawDemandes.stream()
-				.map(DemandeData::new)
-				.collect(Collectors.toList());
+			// --- 1. KPIs REELS ---
+			long totalCitoyens = dao.citoyen.count();
+			long citoyensCeMois = dao.citoyen.countWithCondition("e.dateInscription >= ?1", debutMoisDateTime);
 
-		request.setAttribute("recentDemandesList", recentDemandesList);
+			long actesCeMois = dao.acte.countWithCondition("e.dateEtablissement >= ?1", debutMoisDateOnly);
 
-		// Dans doGet(), section 4. Activités Récentes
+			long demandesAttente = dao.demande.countByStatuts(List.of(StatutDemande.SOUMISE, StatutDemande.EN_COURS));
+			long demandesUrgentes = dao.demande.countWithCondition("e.priorite = ?1 AND e.statut = ?2",
+					PrioriteDemande.URGENTE, StatutDemande.SOUMISE);
 
-		// Création d'entités brutes simulées
-		List<JournalAudit> rawAudits = Arrays.asList(
-				createMockAudit("CREE", "acte_etat_civil", LocalDateTime.now().minusMinutes(45)),
-				createMockAudit("ENREGISTRE", "citoyen", LocalDateTime.now().minusHours(1).minusMinutes(12)),
-				createMockAudit("ENCAISSE", "paiement", LocalDateTime.now().minusHours(2).minusMinutes(5)));
+			java.math.BigDecimal recettesMois = dao.paiement.sumMontantByPeriode(debutMoisDateTime, finMoisDateTime);
 
-		// Transformation en ViewModels "stupides"
-		List<ActiviteData> recentActivitesList = rawAudits.stream()
-				.map(ActiviteData::new)
-				.collect(Collectors.toList());
+			List<KpiData> kpis = List.of(
+					new KpiData(ThemeColor.PRIMARY, Icons.USERS.toString(), String.valueOf(totalCitoyens),
+							"Citoyens enregistrés", true, "+" + citoyensCeMois + " ce mois"),
+					new KpiData(ThemeColor.SECONDARY, Icons.FILE_CERTIFICATE.toString(), String.valueOf(actesCeMois),
+							"Actes ce mois", true, ""),
+					new KpiData(ThemeColor.ACCENT, Icons.CLIPBOARD_LIST.toString(), String.valueOf(demandesAttente),
+							"Demandes en attente", false, demandesUrgentes + " urgentes"),
+					new KpiData(ThemeColor.SUCCESS, Icons.CURRENCY_FRANC.toString(), recettesMois.longValue() + " F",
+							"Recettes (mois)", true, ""));
+			request.setAttribute("kpis", kpis);
 
-		request.setAttribute("recentActivitesList", recentActivitesList);
+			// --- 2. Évolution des actes (Graphique REEL) ---
+			List<Integer> naissances = dao.acte.getEvolutionMensuelle(TypeActe.NAISSANCE, anneeEnCours);
+			List<Integer> mariages = dao.acte.getEvolutionMensuelle(TypeActe.MARIAGE, anneeEnCours);
+			List<Integer> deces = dao.acte.getEvolutionMensuelle(TypeActe.DECES, anneeEnCours);
+
+			EvolutionActesData evolutionData = new EvolutionActesData(naissances, mariages, deces);
+			request.setAttribute("evolutionDataJson", gson.toJson(evolutionData));
+			request.setAttribute("repartitionTypes", evolutionData.getRepartitionTypes());
+
+			// --- 3. Demandes Récentes (Générique via le parent) ---
+			List<DemandeAdministrative> rawDemandes = dao.demande.findRecent("dateSoumission", 5);
+			List<DemandeData> recentDemandesList = rawDemandes.stream()
+					.map(DemandeData::new)
+					.collect(Collectors.toList());
+			request.setAttribute("recentDemandesList", recentDemandesList);
+
+			/// --- 4. Activités Récentes (Si tu as créé le delegate JournalAuditDelegate)
+			// ---
+			List<JournalAudit> rawAudits = dao.audit.findRecent("dateAction", 5);
+			List<ActiviteData> recentActivitesList = rawAudits.stream().map(ActiviteData::new)
+					.collect(Collectors.toList());
+			request.setAttribute("recentActivitesList", recentActivitesList);
+
+			// 🌟 NOUVEAU : Interception du raccourci pour la modale globale 🌟
+			String action = request.getParameter("action");
+			if ("createCitoyen".equals(action)) {
+				// Instanciation d'un citoyen vide
+				Citoyen nouveauCitoyen = new Citoyen();
+
+				// 3. Génération dynamique du formulaire
+				String actionUrl = request.getContextPath() + "/citoyen/formulaire";
+				String formHtml = CitoyenFormFactory.genererHtml(
+						nouveauCitoyen,
+						actionUrl,
+						false);
+				request.setAttribute("formulaireHtml", formHtml);
+
+				// On passe les données au réceptacle dynamique dans base-layout.jsp
+				request.setAttribute("modalTitle", "Ajout rapide d'un citoyen");
+				request.setAttribute("modalContent", formHtml);
+				request.setAttribute("autoOpenModal", true);
+			}
+
+		} finally {
+			if (em.isOpen())
+				em.close();
+		}
 
 		// Forward
 		request.setAttribute("view", "/WEB-INF/jsp/modules/dashboard/index.jsp");
 		request.getRequestDispatcher("/WEB-INF/jsp/layouts/base-layout.jsp").forward(request, response);
-	}
-
-	/**
-	 * Méthode utilitaire pour générer de fausses entités JPA rapidement
-	 */
-	private DemandeAdministrative createMockDemande(String numero, TypeDemande type, String prenom, String nom,
-			StatutDemande statut, LocalDateTime dateSoumission) {
-		Citoyen citoyen = new Citoyen();
-		citoyen.setPrenom(prenom);
-		citoyen.setNom(nom);
-
-		DemandeAdministrative demande = new DemandeAdministrative();
-		demande.setNumeroSuivi(numero);
-		demande.setTypeDemande(type);
-		demande.setCitoyenRequerant(citoyen);
-		demande.setStatut(statut);
-		demande.setDateSoumission(dateSoumission); // Injecte la date relative simulée
-
-		return demande;
-	}
-
-	private JournalAudit createMockAudit(String action, String table, LocalDateTime dateAction) {
-		JournalAudit audit = new JournalAudit();
-		audit.setAction(action);
-		audit.setTableAffectee(table);
-		audit.setDateAction(dateAction);
-
-		// On pourrait simuler un OfficierEtatCivil ici si nécessaire
-		return audit;
 	}
 }

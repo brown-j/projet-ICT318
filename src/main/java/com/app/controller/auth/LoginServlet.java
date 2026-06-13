@@ -26,8 +26,8 @@ public class LoginServlet extends HttpServlet {
 
         // Si l'utilisateur est déjà connecté, on évite qu'il revoie la page login
         HttpSession session = request.getSession(false);
-        if (session != null && session.getAttribute("utilisateurConnecte") != null) {
-            OfficierEtatCivil connecte = (OfficierEtatCivil) session.getAttribute("utilisateurConnecte");
+        if (session != null && session.getAttribute("user") != null) {
+            OfficierEtatCivil connecte = (OfficierEtatCivil) session.getAttribute("user");
 
             // Redirection intelligente selon le rôle
             if (connecte.getRole() == Role.SUPER_ADMIN) {
@@ -65,7 +65,7 @@ public class LoginServlet extends HttpServlet {
 
                     // Connexion approuvée : Création/Récupération de la session
                     HttpSession session = request.getSession();
-                    session.setAttribute("utilisateurConnecte", officier);
+                    session.setAttribute("user", officier);
 
                     // 4. Redirection selon les privilèges de l'acteur
                     response.sendRedirect(request.getContextPath() + "/dashboard");

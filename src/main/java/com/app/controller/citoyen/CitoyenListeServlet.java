@@ -84,7 +84,23 @@ public class CitoyenListeServlet extends HttpServlet {
 					citoyenPourFormulaire,
 					actionUrl,
 					isReadOnly);
-			request.setAttribute("formulaireHtml", formHtml);
+
+			// 🌟 NOUVEAU : Logique de la Modale Globale Centralisée 🌟
+			String modalTitle;
+			if (isReadOnly) {
+				modalTitle = "Détails du citoyen : " + (citoyenPourFormulaire.getNom() != null
+						? citoyenPourFormulaire.getNom() + " " + citoyenPourFormulaire.getPrenom()
+						: "");
+			} else if (citoyenPourFormulaire.getId() != null) {
+				modalTitle = "Modifier le citoyen : " + citoyenPourFormulaire.getNom() + " "
+						+ citoyenPourFormulaire.getPrenom();
+			} else {
+				modalTitle = "Enregistrer un nouveau citoyen";
+			}
+
+			// Injection des variables pour le réceptacle dans base-layout.jsp
+			request.setAttribute("modalTitle", modalTitle);
+			request.setAttribute("modalContent", formHtml);
 
 			// 4. Routage vers le layout maître
 			request.setAttribute("view", "/WEB-INF/jsp/modules/citoyen/liste-citoyen.jsp");

@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 
 import com.google.gson.Gson;
 import com.app.jpa.config.JPAConfig;
-import com.app.jpa.dao.JPADao; // 💡 Import de ton DAO
+import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.Citoyen;
 import com.app.jpa.model.DemandeAdministrative;
 import com.app.jpa.model.JPAEnum.PrioriteDemande;
@@ -100,7 +100,20 @@ public class DemandeListeServlet extends HttpServlet {
 					listeCitoyens,
 					request.getContextPath() + "/demande/formulaire",
 					isReadOnly);
-			request.setAttribute("formulaireHtml", formulaireHtml);
+
+			// 🌟 NOUVEAU : Logique de la Modale Globale Centralisée 🌟
+			String modalTitle;
+			if (isReadOnly) {
+				modalTitle = "Détails de la demande administrative";
+			} else if (demandePourFormulaire.getId() != null) {
+				modalTitle = "Modifier la demande administrative";
+			} else {
+				modalTitle = "Nouvelle demande administrative";
+			}
+
+			// Injection des variables pour le réceptacle dans base-layout.jsp
+			request.setAttribute("modalTitle", modalTitle);
+			request.setAttribute("modalContent", formulaireHtml);
 
 			// 5. Expédition vers le layout maître global
 			request.setAttribute("view", "/WEB-INF/jsp/modules/demande/liste-demande.jsp");
@@ -136,8 +149,6 @@ public class DemandeListeServlet extends HttpServlet {
 				JPADao dao = new JPADao(em);
 
 				// 1. Initialisation de quelques citoyens témoins
-				// (Note: J'ai ajouté une adresse par défaut "Yaoundé" pour éviter l'erreur
-				// PropertyValueException qu'on a eue plus tôt)
 				Citoyen c1 = dao.citoyen.create("Fouda", "Amina", "", "Yaoundé", Sexe.F,
 						LocalDate.of(1990, 1, 1), null, SituationMatrimoniale.CELIBATAIRE,
 						StatutCitoyen.ACTIF);

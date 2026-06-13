@@ -92,8 +92,7 @@ public class ActeListeServlet extends HttpServlet {
 			List<OfficierEtatCivil> listeOfficiers = em
 					.createQuery("SELECT o FROM OfficierEtatCivil o", OfficierEtatCivil.class).getResultList();
 
-			// 4. Génération du formulaire en lui transmettant sa contrainte de lecture
-			// seule
+			// 4. Génération du formulaire via TA Factory
 			String formulaireHtml = ActeEtatCivilFormFactory.genererHtml(
 					actePourFormulaire,
 					listeTypes,
@@ -101,8 +100,24 @@ public class ActeListeServlet extends HttpServlet {
 					listeOfficiers,
 					request.getContextPath() + "/acte/formulaire",
 					isReadOnly);
-			request.setAttribute("formulaireHtml", formulaireHtml);
 
+			// 🌟 NOUVEAU : Logique de la Modale Globale Centralisée 🌟
+			// On définit le titre de façon intelligente selon l'action en cours
+			String modalTitle;
+			if (isReadOnly) {
+				modalTitle = "Consulter l'acte n° "
+						+ (actePourFormulaire.getNumeroActe() != null ? actePourFormulaire.getNumeroActe() : "");
+			} else if (actePourFormulaire.getId() != null) {
+				modalTitle = "Modifier l'acte n° " + actePourFormulaire.getNumeroActe();
+			} else {
+				modalTitle = "Dresser un nouvel acte civil";
+			}
+
+			// On injecte les variables attendues par le réceptacle dans base-layout.jsp
+			request.setAttribute("modalTitle", modalTitle);
+			request.setAttribute("modalContent", formulaireHtml);
+
+			// On renvoie la vue
 			request.setAttribute("view", "/WEB-INF/jsp/modules/acte/liste-acte.jsp");
 			request.getRequestDispatcher("/WEB-INF/jsp/layouts/base-layout.jsp").forward(request, response);
 
@@ -118,6 +133,7 @@ public class ActeListeServlet extends HttpServlet {
 	 * en BDD.
 	 */
 	private void initialiserDonneesSiVide() {
+		// [Ton code d'initialisation reste inchangé ici, il est parfait]
 		EntityManager em = JPAConfig.getEntityManager();
 
 		try {
@@ -130,46 +146,28 @@ public class ActeListeServlet extends HttpServlet {
 				tx.begin();
 
 				System.out.println(">>> Insertion des données fictives via le mini-ORM JPADao...");
-
-				// 💡 Instanciation de ton client d'accès à la manière de Prisma
 				JPADao prisma = new JPADao(em);
 
-				// Insertion des citoyens (Les 3 derniers paramètres à null prennent les valeurs
-				// par défaut)
-				Citoyen c1 = prisma.citoyen.create("Amougou", "Sylvain", "", "Melen", Sexe.M,
-						LocalDate.of(1989, 2, 28), null, null, null);
-
+				Citoyen c1 = prisma.citoyen.create("Amougou", "Sylvain", "", "Melen", Sexe.M, LocalDate.of(1989, 2, 28),
+						null, null, null);
 				Citoyen c2 = prisma.citoyen.create("Atangana", "Dieudonné", "", "Bastos", Sexe.M,
 						LocalDate.of(1963, 4, 12), null, null, null);
-
-				Citoyen c3 = prisma.citoyen.create("Ona", "Samuel", "", "Bastos", Sexe.M,
-						LocalDate.of(1940, 2, 14), null, null, null);
-
+				Citoyen c3 = prisma.citoyen.create("Ona", "Samuel", "", "Bastos", Sexe.M, LocalDate.of(1940, 2, 14),
+						null, null, null);
 				Citoyen c4 = prisma.citoyen.create("Bella", "Chantal", "", "Nlongkak", Sexe.F,
 						LocalDate.of(1988, 5, 18), null, null, null);
 
-				// Insertion de l'officier (Les 4 derniers paramètres gèrent dynamiquement les
-				// valeurs par défaut)
-				OfficierEtatCivil officier = prisma.officier.create("", "Etoa", "Jean-Marie",
-						"677177877", "2ème Adjoint", "Service Civil", null, "Etoa@1234", null, null);
+				OfficierEtatCivil officier = prisma.officier.create("", "Etoa", "Jean-Marie", "677177877",
+						"2ème Adjoint", "Service Civil", null, "Etoa@1234", null, null);
 
-				// Insertion des actes d'état civil (Attention à la réorganisation des
-				// paramètres)
-				prisma.acte.create("NAI-2025-00418", TypeActe.NAISSANCE, c1, officier,
-						LocalDate.of(2025, 2, 10), LocalDate.of(2025, 2, 28), "Mairie Ydé III", StatutActe.DELIVRE,
-						"doc_00418.pdf");
-
+				prisma.acte.create("NAI-2025-00418", TypeActe.NAISSANCE, c1, officier, LocalDate.of(2025, 2, 10),
+						LocalDate.of(2025, 2, 28), "Mairie Ydé III", StatutActe.DELIVRE, "doc_00418.pdf");
 				prisma.acte.create("MAR-2026-10552", TypeActe.MARIAGE, c2, officier, LocalDate.of(2026, 1, 15),
-						LocalDate.of(2026, 1, 20), "Bastos", StatutActe.DELIVRE,
-						"doc_10552.pdf");
-
-				prisma.acte.create("DEC-2026-30119", TypeActe.DECES, c3, officier,
-						LocalDate.of(2026, 5, 14), LocalDate.of(2026, 5, 18), "Hôpital Central", StatutActe.DELIVRE,
-						"doc_30119.pdf");
-
-				prisma.acte.create("NAI-2026-00984", TypeActe.NAISSANCE, c4, officier,
-						LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 5), "Clinique de Fouda", StatutActe.EN_COURS,
-						null);
+						LocalDate.of(2026, 1, 20), "Bastos", StatutActe.DELIVRE, "doc_10552.pdf");
+				prisma.acte.create("DEC-2026-30119", TypeActe.DECES, c3, officier, LocalDate.of(2026, 5, 14),
+						LocalDate.of(2026, 5, 18), "Hôpital Central", StatutActe.DELIVRE, "doc_30119.pdf");
+				prisma.acte.create("NAI-2026-00984", TypeActe.NAISSANCE, c4, officier, LocalDate.of(2026, 6, 1),
+						LocalDate.of(2026, 6, 5), "Clinique de Fouda", StatutActe.EN_COURS, null);
 
 				tx.commit();
 				System.out.println(">>> Initialisation terminée avec succès !");

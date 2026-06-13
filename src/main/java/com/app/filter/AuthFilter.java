@@ -41,7 +41,7 @@ public class AuthFilter implements Filter {
                 cheminRequete.startsWith(request.getContextPath() + "/js");
 
         // 2. Vérifier l'état de l'utilisateur
-        boolean isConnecte = (session != null && session.getAttribute("utilisateurConnecte") != null);
+        boolean isConnecte = (session != null && session.getAttribute("user") != null);
         boolean isPageLogin = cheminRequete.equals(loginURI);
 
         // 3. Logique d'autorisation

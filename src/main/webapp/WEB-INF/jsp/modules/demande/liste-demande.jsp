@@ -84,24 +84,6 @@
   </div>
 </div>
 
-<%-- ========================================================= --%>
-<%-- MODALE D'ENREGISTREMENT ET DE CONSULTATION DES DEMANDES   --%>
-<%-- ========================================================= --%>
-<div class="modal-backdrop ${autoOpenModal ? 'show' : ''}" id="modal-demande" role="dialog" aria-modal="true">
-  <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title" style="font-size:var(--text-xl)">Traitement d'une demande administrative</h2>
-      <button class="icon-btn" onclick="closeModal('demande')" aria-label="Fermer">
-        <i class="ti ti-x" aria-hidden="true"></i>
-      </button>
-    </div>
-
-    <%-- 💡 ALIGNEMENT : Injection propre du formulaire généré par DemandeFormFactory --%>
-    ${formulaireHtml}
-
-  </div>
-</div>
-
 <script>
   document.addEventListener("DOMContentLoaded", () => {
     // 💡 CORRECTION : Sécurisation Null-Safe du JSON via Expression Language JSP

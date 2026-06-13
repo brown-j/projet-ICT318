@@ -2,11 +2,13 @@ package com.app.jpa.dao;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-import com.app.jpa.dao.JPADao.JPADelegate;
 import com.app.jpa.model.*;
 import com.app.jpa.model.JPAEnum.*;
+import com.app.util.AuditContext;
 import com.app.util.HashUtil;
 
 import jakarta.persistence.EntityManager;
@@ -31,6 +33,7 @@ public class JPADao {
     public final ActeEtatCivilDelegate acte;
     public final DemandeAdministrativeDelegate demande;
     public final PaiementDelegate paiement;
+    public final JournalAuditDelegate audit;
 
     public JPADao(EntityManager em) {
         this.em = em;
@@ -39,6 +42,7 @@ public class JPADao {
         this.acte = new ActeEtatCivilDelegate();
         this.demande = new DemandeAdministrativeDelegate();
         this.paiement = new PaiementDelegate();
+        this.audit = new JournalAuditDelegate();
     }
 
     // ===================================================================================
@@ -58,6 +62,67 @@ public class JPADao {
         protected JPADelegate(Class<E> entityClass) {
             this.entityClass = entityClass;
             this.entityName = entityClass.getSimpleName();
+        }
+
+        /**
+         * 🌟 MOTEUR D'AUDIT AUTOMATIQUE
+         * Intercepte le contexte et écrit dans journal_audit de manière sécurisée.
+         */
+        protected void saveAudit(String actionType, E entity) {
+            OfficierEtatCivil acteur = AuditContext.getOfficier();
+
+            // On n'exécute l'audit que si un utilisateur est authentifié (évite les crashs
+            // hors-session)
+            if (acteur != null && !(entity instanceof JournalAudit)) {
+                try {
+                    JournalAudit audit = new JournalAudit();
+                    audit.setOfficier(acteur);
+                    audit.setAction(actionType);
+                    audit.setTableAffectee(entityName);
+                    audit.setAdresseIp(AuditContext.getIp());
+                    audit.setDonneesJson(convertEntityToJsonBytes(entity));
+
+                    // Persiste directement à l'aide de l'EntityManager commun
+                    em.persist(audit);
+                } catch (Exception e) {
+                    System.err.println("⚠️ Échec de l'écriture de l'audit : " + e.getMessage());
+                }
+            }
+        }
+
+        /**
+         * Convertisseur Réflexif en JSON pour l'audit.
+         * Évite les dépendances tierces et ignore les objets complexes / Lazy pour ne
+         * pas planter.
+         */
+        private String convertEntityToJsonBytes(E entity) {
+            Map<String, String> jsonMap = new LinkedHashMap<>();
+            for (Field field : entityClass.getDeclaredFields()) {
+                field.setAccessible(true);
+                try {
+                    Object val = field.get(entity);
+                    if (val != null) {
+                        // On n'enregistre que les types primitifs, chaînes, enums et dates pour l'audit
+                        if (val instanceof Number || val instanceof String || val instanceof Boolean
+                                || val instanceof Enum || val instanceof LocalDate || val instanceof LocalDateTime) {
+                            jsonMap.put(field.getName(), val.toString());
+                        } else {
+                            // Pour les jointures (@ManyToOne), on se contente d'écrire qu'un lien existe
+                            jsonMap.put(field.getName(), "[Relation/Objet Complex]");
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore les champs illisibles
+                }
+            }
+            // Reconstruction rapide au format JSON brut
+            StringBuilder sb = new StringBuilder("{");
+            jsonMap.forEach(
+                    (k, v) -> sb.append("\"").append(k).append("\":\"").append(v.replace("\"", "\\\"")).append("\","));
+            if (sb.length() > 1)
+                sb.setLength(sb.length() - 1); // Retire la dernière virgule
+            sb.append("}");
+            return sb.toString();
         }
 
         private void validateRequiedFields(E entity) {
@@ -160,11 +225,42 @@ public class JPADao {
         public long count() {
             return em.createQuery("SELECT COUNT(e) FROM " + entityName + " e", Long.class).getSingleResult();
         }
+
+        /**
+         * Récupère les "N" derniers enregistrements triés par un champ de date.
+         * Ex: jpa.demande.findRecent("dateSoumission", 5)
+         */
+        public List<E> findRecent(String dateFieldName, int limit) {
+            return em.createQuery(
+                    "SELECT e FROM " + entityName + " e ORDER BY e." + dateFieldName + " DESC", entityClass)
+                    .setMaxResults(limit)
+                    .getResultList();
+        }
+
+        /**
+         * Compte de manière générique avec une clause WHERE.
+         * Ex: jpa.demande.countWithCondition("e.statut = ?1", StatutDemande.EN_COURS)
+         */
+        public long countWithCondition(String whereClause, Object... params) {
+            var query = em.createQuery(
+                    "SELECT COUNT(e) FROM " + entityName + " e WHERE " + whereClause, Long.class);
+            for (int i = 0; i < params.length; i++) {
+                query.setParameter(i + 1, params[i]);
+            }
+            return query.getSingleResult();
+        }
     }
 
     // ===================================================================================
     // CLIENT DELEGATES - IMPLEMENTATIONS SPECIFIQUES
     // ===================================================================================
+
+    // Nouvelle implémentation spécifique pour requêter le journal au besoin
+    public class JournalAuditDelegate extends JPADelegate<JournalAudit> {
+        public JournalAuditDelegate() {
+            super(JournalAudit.class);
+        }
+    }
 
     public class CitoyenDelegate extends JPADelegate<Citoyen> {
         public CitoyenDelegate() {
@@ -326,6 +422,32 @@ public class JPADao {
 
             return super.create(acte);
         }
+
+        /**
+         * Récupère la répartition mensuelle d'un type d'acte pour une année donnée
+         * (Graphique).
+         * Renvoie une liste de 12 entiers (Janvier à Décembre).
+         */
+        public List<Integer> getEvolutionMensuelle(TypeActe type, int annee) {
+            // EXTRACT() est une fonction standard JPQL très performante
+            String jpql = "SELECT EXTRACT(MONTH FROM a.dateEtablissement), COUNT(a) FROM ActeEtatCivil a " +
+                    "WHERE a.typeActe = :type AND EXTRACT(YEAR FROM a.dateEtablissement) = :annee " +
+                    "GROUP BY EXTRACT(MONTH FROM a.dateEtablissement)";
+
+            List<Object[]> results = em.createQuery(jpql, Object[].class)
+                    .setParameter("type", type)
+                    .setParameter("annee", annee)
+                    .getResultList();
+
+            // Initialiser un tableau de 12 mois à zéro
+            Integer[] mois = new Integer[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            for (Object[] row : results) {
+                int monthIndex = ((Number) row[0]).intValue() - 1; // 1-12 devient 0-11
+                mois[monthIndex] = ((Number) row[1]).intValue();
+            }
+
+            return java.util.Arrays.asList(mois);
+        }
     }
 
     public class DemandeAdministrativeDelegate extends JPADelegate<DemandeAdministrative> {
@@ -371,6 +493,16 @@ public class JPADao {
         }
 
         /**
+         * Compte les demandes correspondant à une liste de statuts (IN clause).
+         */
+        public long countByStatuts(List<StatutDemande> statuts) {
+            return em.createQuery(
+                    "SELECT COUNT(d) FROM DemandeAdministrative d WHERE d.statut IN :statuts", Long.class)
+                    .setParameter("statuts", statuts)
+                    .getSingleResult();
+        }
+
+        /**
          * Fait passer une demande à l'état EN_COURS (ex: après paiement).
          */
         public void marquerEnCours(DemandeAdministrative demande) {
@@ -410,16 +542,44 @@ public class JPADao {
         }
 
         /**
-         * Clôture une demande et y associe le document final généré.
+         * Clôture une demande, y associe le document final et facture la prestation en
+         * base.
+         * 
+         * @param demande       La demande à clôturer.
+         * @param documentFinal Le chemin/nom du document PDF généré.
+         * @param caissier      L'officier qui valide l'encaissement (Obligatoire).
+         * @param modePaiement  Le moyen de paiement utilisé (si null, passera en
+         *                      ESPECES).
          */
-        public void cloturer(DemandeAdministrative demande, String documentFinal) {
+        public void cloturer(DemandeAdministrative demande, String documentFinal, OfficierEtatCivil caissier,
+                ModePaiement modePaiement) {
             if (demande.getStatut() == StatutDemande.VALIDEE) {
+
+                // 1. Mise à jour de l'état de la demande
                 demande.setStatut(StatutDemande.CLOTUREE);
                 demande.setDocumentFinal(documentFinal);
                 update(demande);
-                System.out.println("→ [Action] Demande " + demande.getNumeroSuivi() + " CLOTUREE avec succès.");
+
+                // 2. Récupération automatique du tarif via le TypeDemande
+                java.math.BigDecimal montant = (demande.getTypeDemande() != null
+                        && demande.getTypeDemande().getTarifFcfa() != null)
+                                ? demande.getTypeDemande().getTarifFcfa()
+                                : java.math.BigDecimal.ZERO;
+
+                // 3. Création et persistance du paiement associé via le delegate existant
+                paiement.create(
+                        null, // La référence de reçu sera autogénérée
+                        demande,
+                        montant,
+                        modePaiement != null ? modePaiement : ModePaiement.ESPECES,
+                        caissier,
+                        LocalDateTime.now());
+
+                System.out.println("→ [Action] Demande " + demande.getNumeroSuivi() + " CLOTUREE et Paiement de "
+                        + montant + " FCFA enregistré avec succès.");
             } else {
-                throw new IllegalStateException("La demande doit d'abord être VALIDEE avant d'être clôturée.");
+                throw new IllegalStateException(
+                        "La demande doit d'abord être VALIDEE avant d'être clôturée et facturée.");
             }
         }
     }
@@ -474,5 +634,20 @@ public class JPADao {
             // Exécution de la persistance et de la validation par introspection du parent
             return super.create(p);
         }
+
+        /**
+         * Calcule le total encaissé sur une période donnée (Mois, Année, Jour).
+         */
+        public java.math.BigDecimal sumMontantByPeriode(LocalDateTime debut, LocalDateTime fin) {
+            java.math.BigDecimal total = em.createQuery(
+                    "SELECT SUM(p.montant) FROM Paiement p WHERE p.datePaiement BETWEEN :debut AND :fin",
+                    java.math.BigDecimal.class)
+                    .setParameter("debut", debut)
+                    .setParameter("fin", fin)
+                    .getSingleResult();
+
+            return total != null ? total : java.math.BigDecimal.ZERO;
+        }
+
     }
 }
