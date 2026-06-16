@@ -18,8 +18,8 @@ public class PaiementRow {
         this.referenceRecu = paiement.getReferenceRecu();
 
         // 1. Extraction du type de demande associée
-        if (paiement.getDemande() != null && paiement.getDemande().getTypeDemande() != null) {
-            this.typeDemandeLabel = paiement.getDemande().getTypeDemande().getLibelle();
+        if (paiement.getDemande() != null && paiement.getDemande().getTypeActe() != null) {
+            this.typeDemandeLabel = paiement.getDemande().getTypeActe().getLibelle();
         } else {
             this.typeDemandeLabel = "Recette Directe / Autre";
         }

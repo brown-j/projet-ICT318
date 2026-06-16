@@ -7,8 +7,8 @@ import com.app.jpa.model.DemandeAdministrative;
 import com.app.jpa.model.JPAEnum.ModePaiement;
 import com.app.jpa.model.JPAEnum.PrioriteDemande;
 import com.app.jpa.model.JPAEnum.StatutDemande;
-import com.app.jpa.model.JPAEnum.TypeDemande;
 import com.app.jpa.model.OfficierEtatCivil;
+import com.app.jpa.model.TypeActe;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
@@ -36,22 +36,27 @@ public class DemandeFormServlet extends HttpServlet {
             tx.begin();
             JPADao dao = new JPADao(em);
 
-            // 1. Récupération des paramètres du formulaire
+            // 1. Récupération des paramètres du formulaire (Aligné avec DemandeFormFactory)
             String idStr = request.getParameter("id");
             String statutStr = request.getParameter("statut");
-            String typeDemandeStr = request.getParameter("typeDemande");
+            String idTypeActeStr = request.getParameter("idTypeActe"); // Le code du TypeActe (ex: ACTE_NAISS)
             String idCitoyenStr = request.getParameter("idCitoyenPrincipal");
             String prioriteStr = request.getParameter("priorite");
             String documentFinal = request.getParameter("documentFinal");
+            String description = request.getParameter("description");
+            String motifRejet = request.getParameter("motifRejet");
+            String commentaires = request.getParameter("commentaires");
 
             // 2. MODE CRÉATION (Pas d'ID)
             if (idStr == null || idStr.trim().isEmpty()) {
 
-                TypeDemande type = typeDemandeStr != null ? TypeDemande.valueOf(typeDemandeStr) : null;
-                PrioriteDemande priorite = prioriteStr != null ? PrioriteDemande.valueOf(prioriteStr) : null;
+                TypeActe type = idTypeActeStr != null ? dao.typeActe.findInCache(idTypeActeStr) : null;
+                PrioriteDemande priorite = prioriteStr != null ? PrioriteDemande.valueOf(prioriteStr)
+                        : PrioriteDemande.NORMALE;
                 Citoyen requerant = idCitoyenStr != null ? dao.citoyen.findUnique(Long.parseLong(idCitoyenStr)) : null;
 
-                dao.demande.create(
+                // Création via le DAO
+                DemandeAdministrative nouvelleDemande = dao.demande.create(
                         null,
                         type,
                         requerant,
@@ -60,7 +65,15 @@ public class DemandeFormServlet extends HttpServlet {
                         priorite,
                         documentFinal);
 
-                // Adaptation pour le Toast
+                // Ajout des textes supplémentaires (au cas où le dao.demande.create ne les gère
+                // pas dans ses arguments)
+                if (nouvelleDemande != null) {
+                    nouvelleDemande.setDescription(description);
+                    nouvelleDemande.setCommentaires(commentaires);
+                    dao.demande.update(nouvelleDemande);
+                }
+
+                // Toast Notification
                 request.getSession().setAttribute("toastMsg", "Demande créée avec succès.");
                 request.getSession().setAttribute("toastType", "success");
 
@@ -71,22 +84,37 @@ public class DemandeFormServlet extends HttpServlet {
                 DemandeAdministrative demande = dao.demande.findUnique(id);
 
                 if (demande != null) {
-                    if (typeDemandeStr != null)
-                        demande.setTypeDemande(TypeDemande.valueOf(typeDemandeStr));
-                    if (prioriteStr != null)
-                        demande.setPriorite(PrioriteDemande.valueOf(prioriteStr));
-                    if (idCitoyenStr != null)
-                        demande.setCitoyenRequerant(dao.citoyen.findUnique(Long.parseLong(idCitoyenStr)));
-                    if (documentFinal != null && !documentFinal.trim().isEmpty())
-                        demande.setDocumentFinal(documentFinal.trim());
 
+                    // --- Mise à jour des informations modifiables ---
+                    if (idTypeActeStr != null) {
+                        demande.setTypeActe(dao.typeActe.findInCache(idTypeActeStr));
+                    }
+                    if (prioriteStr != null) {
+                        demande.setPriorite(PrioriteDemande.valueOf(prioriteStr));
+                    }
+                    if (idCitoyenStr != null) {
+                        demande.setCitoyenRequerant(dao.citoyen.findUnique(Long.parseLong(idCitoyenStr)));
+                    }
+                    if (documentFinal != null)
+                        demande.setDocumentFinal(documentFinal.trim());
+                    if (description != null)
+                        demande.setDescription(description.trim());
+                    if (motifRejet != null)
+                        demande.setMotifRejet(motifRejet.trim());
+                    if (commentaires != null)
+                        demande.setCommentaires(commentaires.trim());
+
+                    // --- Gestion intelligente du Statut ---
                     if (statutStr != null && !statutStr.isEmpty()) {
                         StatutDemande nouveauStatut = StatutDemande.valueOf(statutStr);
+                        OfficierEtatCivil user = (OfficierEtatCivil) request.getSession().getAttribute("user");
+                        if (user == null) // on peut verifier le role
+                            throw new IllegalStateException("Acces refusé: connexion requise");
 
                         if (demande.getStatut() != nouveauStatut) {
                             switch (nouveauStatut) {
                                 case EN_COURS:
-                                    dao.demande.marquerEnCours(demande);
+                                    dao.demande.marquerEnCours(demande, user);
                                     break;
                                 case VALIDEE:
                                     dao.demande.valider(demande);
@@ -95,25 +123,18 @@ public class DemandeFormServlet extends HttpServlet {
                                     dao.demande.rejeter(demande);
                                     break;
                                 case CLOTUREE:
-                                    OfficierEtatCivil officierConnecte = (OfficierEtatCivil) request.getSession()
-                                            .getAttribute("user");
-
-                                    dao.demande.cloturer(
-                                            demande,
-                                            documentFinal,
-                                            officierConnecte,
-                                            ModePaiement.ESPECES);
+                                    dao.demande.cloturer(demande, user, ModePaiement.ESPECES);
                                     break;
                                 default:
                                     demande.setStatut(nouveauStatut);
                                     dao.demande.update(demande);
                             }
 
-                            // Adaptation pour le Toast
                             request.getSession().setAttribute("toastMsg",
-                                    "Demande mise à jour et statut passé à " + nouveauStatut.name());
+                                    "Demande mise à jour et statut passé à " + nouveauStatut.name().replace("_", " "));
                             request.getSession().setAttribute("toastType", "success");
                         } else {
+                            // Le statut n'a pas changé, on update juste les autres champs
                             dao.demande.update(demande);
                             request.getSession().setAttribute("toastMsg", "Informations de la demande mises à jour.");
                             request.getSession().setAttribute("toastType", "success");
@@ -135,7 +156,7 @@ public class DemandeFormServlet extends HttpServlet {
                 tx.rollback();
             // Capture des erreurs de logique métier (ex: Clôture d'une demande non validée)
             request.getSession().setAttribute("toastMsg", e.getMessage());
-            request.getSession().setAttribute("toastType", "warning"); // warning ou error selon ton envie
+            request.getSession().setAttribute("toastType", "warning");
         } catch (Exception e) {
             if (tx.isActive())
                 tx.rollback();

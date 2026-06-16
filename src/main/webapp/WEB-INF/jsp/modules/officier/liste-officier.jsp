@@ -8,8 +8,10 @@
         <p><strong id="officier-total-count">0</strong> agent(s) filtré(s) / <span style="color:var(--text-muted)">${totalCount} au total</span></p>
     </div>
     <div class="page-header-actions">
-        <button class="btn btn-ghost btn-sm"><i class="ti ti-download" aria-hidden="true"></i> Exporter</button>
-        <button class="btn btn-outline btn-sm" onclick="openModal('officier')" title="Afficher le formulaire actuellement chargé">
+        <button id="btn-exporter-officiers" class="btn btn-ghost btn-sm">
+            <i class="ti ti-download" aria-hidden="true"></i> Exporter
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="openModal('global')" title="Afficher le formulaire actuellement chargé">
             <i class="ti ti-eye" aria-hidden="true"></i> Formulaire
         </button>
         <%-- Redirection vers le contrôleur pour initialiser un contexte de création propre d'officier --%>
@@ -31,24 +33,19 @@
             </div>
         </div>
 
+        <%-- 💡 DYNAMISATION DU RÔLE : Options injectées par JS --%>
         <div style="min-width:180px">
             <label class="form-label" for="filterRole">Rôle système</label>
             <select class="form-control" id="filterRole">
                 <option value="">Tous les rôles</option>
-                <option value="Super Administrateur">Super Administrateur</option>
-                <option value="Administrateur">Administrateur</option>
-                <option value="Officier d'État Civil">Officier d'État Civil</option>
-                <option value="Agent de Saisie">Agent de Saisie</option>
             </select>
         </div>
 
+        <%-- 💡 DYNAMISATION DU STATUT : Options injectées par JS --%>
         <div style="min-width:160px">
             <label class="form-label" for="filterStatutOfficier">Statut d'accès</label>
             <select class="form-control" id="filterStatutOfficier">
                 <option value="">Tous les statuts</option>
-                <option value="Actif">Actif</option>
-                <option value="Suspendu">Suspendu</option>
-                <option value="Inactif">Inactif</option>
             </select>
         </div>
     </div>
@@ -84,10 +81,32 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", () => {
-        // Sécurisation Null-Safe du JSON via Expression Language JSP
+        // 1. Sécurisation Null-Safe du JSON via Expression Language JSP
         const officiersData = ${empty officiersJson ? '[]' : officiersJson};
         
-        // Initialisation et configuration de la table dynamique pour les officiers
+        // 💡 1.B PEUPLEMENT DYNAMIQUE DES FILTRES DEPUIS LES DONNÉES DU TABLEAU
+        
+        // Extraction et injection des RÔLES réels
+        const filterRoleSelect = document.getElementById('filterRole');
+        const rolesUniques = [...new Set(officiersData.map(o => o.roleLabel).filter(Boolean))];
+        rolesUniques.sort().forEach(role => {
+            const option = document.createElement('option');
+            option.value = role;
+            option.textContent = role;
+            filterRoleSelect.appendChild(option);
+        });
+        
+        // Extraction et injection des STATUTS réels
+        const filterStatutSelect = document.getElementById('filterStatutOfficier');
+        const statutsUniques = [...new Set(officiersData.map(o => o.statutLabel).filter(Boolean))];
+        statutsUniques.sort().forEach(statut => {
+            const option = document.createElement('option');
+            option.value = statut;
+            option.textContent = statut;
+            filterStatutSelect.appendChild(option);
+        });
+        
+        // 2. Initialisation et configuration de la table dynamique pour les officiers
         const officierTable = new DynamicTable({
             data: officiersData,
             tbodyId: 'officier-table-body',
@@ -99,20 +118,20 @@
             // Gabarit HTML d'une ligne (Template String)
             renderRow: (o) => `
             <tr>
-            <td><code style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">\${o.matricule}</code></td>
-            <td><strong style="font-weight:var(--fw-medium)">\${o.nomComplet}</strong></td>
-            <td style="color:var(--text-muted)">\${o.email}</td>
-            <td>\${o.service}</td>
-            <td><span class="badge badge-\${o.roleColorClass}">\${o.roleLabel}</span></td>
+            <td><code style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">\${o.matricule || ''}</code></td>
+            <td><strong style="font-weight:var(--fw-medium)">\${o.nomComplet || ''}</strong></td>
+            <td style="color:var(--text-muted)">\${o.email || ''}</td>
+            <td>\${o.service || ''}</td>
+            <td><span class="badge badge-\${o.roleColorClass || 'default'}">\${o.roleLabel || ''}</span></td>
             <td>
             \${o.hasSignature ?
             '<span style="color:var(--color-success);font-size:var(--text-sm)"><i class="ti ti-signature"></i> Configurée</span>' :
             '<span style="color:var(--text-muted);font-size:var(--text-sm)"><i class="ti ti-signature-off"></i> Manquante</span>'}
             </td>
             <td>
-            <span class="badge badge-\${o.statutColorClass}">
+            <span class="badge badge-\${o.statutColorClass || 'default'}">
             \${o.afficherPointStatut ? '<i class="ti ti-point-filled" style="font-size:10px" aria-hidden="true"></i> ' : ''}
-            \${o.statutLabel}
+            \${o.statutLabel || ''}
             </span>
             </td>
             <td style="text-align:right">
@@ -132,13 +151,13 @@
             </tr>
             `,
             
-            // Prédicat de filtrage multicritère
+            // Prédicat de filtrage multicritère sécurisé contre le Null/Undefined
             filterFn: (item, filters) => {
-                const query = (filters.query || '').toLowerCase();
+                const query = (filters.query || '').toLowerCase().trim();
                 const matchQuery = !query ||
-                item.nomComplet.toLowerCase().includes(query) ||
-                item.matricule.toLowerCase().includes(query) ||
-                item.email.toLowerCase().includes(query);
+                (item.nomComplet || '').toLowerCase().includes(query) ||
+                (item.matricule || '').toLowerCase().includes(query) ||
+                (item.email || '').toLowerCase().includes(query);
                 
                 const matchRole = !filters.role || item.roleLabel === filters.role;
                 const matchStatut = !filters.statut || item.statutLabel === filters.statut;
@@ -147,7 +166,7 @@
             }
         });
         
-        // Liaison des événements UI aux filtres de la table
+        // 3. Liaison des événements UI aux filtres de la table
         document.getElementById('searchOfficier').addEventListener('input', (e) => {
             officierTable.setFilter('query', e.target.value);
         });
@@ -160,7 +179,27 @@
             officierTable.setFilter('statut', e.target.value);
         });
         
-        // Premier affichage
+        // 4. Premier affichage au chargement de l'écran
         officierTable.render(1);
+        
+        // Activation de l'ouverture automatique du popup global si demandé par la servlet
+        <c:if test="${autoOpenModal}">
+        openModal('global');
+        </c:if>
+        
+        // Configuration et exécution de l'exportation CSV globale
+        const mappingColonnesOfficiers = {
+            matricule: "Matricule",
+            nomComplet: "Nom Complet",
+            email: "Email (Identifiant)",
+            service: "Service / Bureau",
+            roleLabel: "Rôle",
+            statutLabel: "Statut d'accès"
+        };
+        
+        document.getElementById('btn-exporter-officiers').addEventListener('click', (e) => {
+            e.preventDefault();
+            exportCSV(officiersData, mappingColonnesOfficiers, 'registre_personnel_acces');
+        });
     });
 </script>

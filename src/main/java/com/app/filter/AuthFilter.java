@@ -31,6 +31,7 @@ public class AuthFilter implements Filter {
 
         // 1. Définir les chemins publics (qui ne nécessitent pas de connexion)
         String loginURI = request.getContextPath() + "/login";
+        String portalURI = request.getContextPath() + "/portal/commune";
         String cheminRequete = request.getRequestURI();
 
         // 💡 On laisse passer les ressources statiques (CSS, JS, Images) y compris le
@@ -44,16 +45,17 @@ public class AuthFilter implements Filter {
         boolean isConnecte = (session != null && session.getAttribute("user") != null);
         boolean isPageLogin = cheminRequete.equals(loginURI);
 
+        // 🌟 NOUVEAU : On autorise le portail citoyen public en accès libre
+        boolean isPagePortailPublic = cheminRequete.equals(portalURI) || cheminRequete.startsWith(portalURI);
+
         // 3. Logique d'autorisation
-        if (isConnecte || isPageLogin || isRessourceStatique) {
-            // ✅ L'utilisateur est connecté, OU il demande la page de login, OU c'est du
-            // CSS/JS
-            // On laisse passer la requête vers la Servlet demandée
+        if (isConnecte || isPageLogin || isRessourceStatique || isPagePortailPublic) {
+            // ✅ Accès autorisé : Utilisateur connecté, page login, ressources statiques OU
+            // portail citoyen
             chain.doFilter(request, response);
         } else {
-            // ❌ Accès refusé : L'utilisateur n'est pas connecté et essaie d'accéder à une
-            // page protégée
-            // On le redirige de force vers la page de connexion
+            // ❌ Accès refusé : L'utilisateur n'est pas connecté et essaie d'accéder au
+            // back-office protégé
             response.sendRedirect(loginURI);
         }
     }

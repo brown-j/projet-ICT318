@@ -11,7 +11,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 
 import com.app.jpa.config.JPAConfig;
@@ -20,6 +19,7 @@ import com.app.jpa.model.OfficierEtatCivil;
 import com.app.jpa.model.JPAEnum.Role;
 import com.app.jpa.model.JPAEnum.StatutOfficier;
 import com.app.util.HashUtil;
+import com.app.util.FileManager;
 
 @WebServlet("/officier/formulaire")
 @MultipartConfig(fileSizeThreshold = 1024 * 1024 * 1, // 1 Mo
@@ -59,9 +59,11 @@ public class OfficierFormServlet extends HttpServlet {
             // Initialisation de ton mini-ORM Prisma-like
             JPADao jpa = new JPADao(em);
 
-            // Variable qui contiendra notre entité finale (créée ou récupérée) pour le
-            // traitement du fichier
+            // Variable qui contiendra notre entité finale (créée ou récupérée)
             OfficierEtatCivil officier;
+
+            // Stockage temporaire du nom de l'ancienne signature pour le FileManager
+            String ancienneSignature = null;
 
             if (isModification) {
                 // 🔄 MODE MODIFICATION : On utilise le delegate pour charger l'entité managée
@@ -69,6 +71,8 @@ public class OfficierFormServlet extends HttpServlet {
                 if (officier == null) {
                     throw new ServletException("Officier introuvable pour l'ID : " + idParam);
                 }
+
+                ancienneSignature = officier.getSignatureNumerique();
 
                 // Hydratation des modifications
                 officier.setNom(nom.trim().toUpperCase());
@@ -87,14 +91,11 @@ public class OfficierFormServlet extends HttpServlet {
                     officier.setMotDePasse(HashUtil.hashPassword(motDePasse.trim()));
                 }
 
-                // Mise à jour via le delegate parent (déclenche la validation réflexive et
-                // l'audit)
+                // Étape de synchronisation / audit
                 jpa.officier.update(officier);
 
             } else {
-                // ✨ MODE CRÉATION : On délègue tout à la méthode métier blindée de ton Delegate
-                // Elle valide l'unicité du mot de passe, l'absence d'un second super-admin et
-                // hache le mot de passe.
+                // ✨ MODE CRÉATION : On délègue tout à la méthode métier de ton Delegate
                 officier = jpa.officier.create(
                         matricule,
                         nom.trim().toUpperCase(),
@@ -103,7 +104,7 @@ public class OfficierFormServlet extends HttpServlet {
                         titre.trim(),
                         service.trim(),
                         email.trim().toLowerCase(),
-                        motDePasse, // Passé en clair, ton delegate s'occupe du hachage !
+                        motDePasse,
                         LocalDate.parse(datePriseFonctionParam),
                         Role.valueOf(roleParam));
 
@@ -113,23 +114,19 @@ public class OfficierFormServlet extends HttpServlet {
                 }
             }
 
-            // 4. Traitement du fichier de signature numérique (Commun à la création et
-            // modification)
+            // 4. ✨ Utilisation de la fonction atomique REPLACE pour la signature numérique
+            // Supprime l'ancien fichier sur le disque (si présent) et écrit le nouveau sous
+            // forme d'UUID.
             Part filePart = request.getPart("signatureFile");
-            if (filePart != null && filePart.getSize() > 0) {
-                String fileName = Paths.get(filePart.getSubmittedFileName()).getFileName().toString();
-                String extension = fileName.substring(fileName.lastIndexOf("."));
-                String uniqueImageName = "sig_" + officier.getMatricule() + "_" + System.currentTimeMillis()
-                        + extension;
-                officier.setSignatureNumerique(uniqueImageName);
+            String signaturePathFinal = FileManager.replace(ancienneSignature, filePart, "signatures");
 
-                // Si on vient de le créer et qu'on modifie un champ post-persist (le nom du
-                // fichier),
-                // l'update garantit la bonne synchronisation de l'état.
-                if (!isModification) {
-                    jpa.officier.update(officier);
-                }
-            }
+            // On affecte le résultat (nouveau nom de fichier ou ancien conservé si aucun
+            // upload)
+            officier.setSignatureNumerique(signaturePathFinal);
+
+            // 💡 Important : Comme on modifie l'état de l'entité managée après sa création
+            // ou son premier update, Hibernate interceptera automatiquement le changement
+            // grâce au Dirty Checking avant le commit final de la transaction.
 
             tx.commit();
 

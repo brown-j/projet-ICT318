@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.app.jpa.model.JPAEnum.StatutActe;
-import com.app.jpa.model.JPAEnum.TypeActe;
 
 @Entity
 @Table(name = "acte_etat_civil")
@@ -16,8 +15,8 @@ public class ActeEtatCivil implements Serializable {
     @Column(name = "id_acte")
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type_acte", nullable = false, length = 30)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "type_acte", nullable = false)
     private TypeActe typeActe;
 
     @ManyToOne(fetch = FetchType.LAZY)

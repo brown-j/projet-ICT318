@@ -20,6 +20,7 @@ public enum Icons {
     EYE,
     SEARCH,
     X,
+    FILE_TEXT,
     EDIT;
 
     @Override

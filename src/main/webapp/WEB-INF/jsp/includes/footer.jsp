@@ -9,6 +9,7 @@
 <script src="${pageContext.request.contextPath}/resources/js/charts-init.js"></script>
 <script src="${pageContext.request.contextPath}/resources/js/dynamic-table.js"></script>
 <script src="${pageContext.request.contextPath}/resources/js/app-core.js"></script>
+<script src="${pageContext.request.contextPath}/resources/js/export-csv.js"></script>
 
 <%-- 🌟 PONT ENTRE LA SESSION JAVA ET LA FONCTION JS 🌟 --%>
 <c:if test="${not empty sessionScope.toastMsg}">

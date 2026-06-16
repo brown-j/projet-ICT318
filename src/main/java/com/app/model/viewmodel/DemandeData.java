@@ -19,8 +19,9 @@ public class DemandeData {
         // 1. Extractions de base
         this.numeroSuivi = demandeBrute.getNumeroSuivi();
 
-        this.titreDemande = (demandeBrute.getTypeDemande() != null)
-                ? demandeBrute.getTypeDemande().getLibelle()
+        // 💡 CORRECTION : Utilisation de getTypeActe() au lieu de getTypeDemande()
+        this.titreDemande = (demandeBrute.getTypeActe() != null)
+                ? demandeBrute.getTypeActe().getLibelle()
                 : "Demande non spécifiée";
 
         String nomDemandeur = "";

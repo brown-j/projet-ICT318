@@ -5,10 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.app</groupId>
-    <artifactId>mon-premier-projet</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <artifactId>tp-ict318-g16</artifactId>
+    <version>1.0.0</version>
     
-    <!-- On dit à Maven de générer un fichier .war et non un .jar -->
     <packaging>war</packaging>
 
     <properties>
@@ -18,11 +17,10 @@
     </properties>
 
     <dependencies>
-        <!-- Le dictionnaire de base pour le Web (Servlet API) -->
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
-            <version>5.0.0</version>
+            <version>6.0.0</version>
             <scope>provided</scope>
         </dependency>
 
@@ -81,8 +79,9 @@
         </dependency>
     </dependencies>
 
-    <!-- Bloc de configuration des plugins ajouté pour corriger l'erreur initiale -->
     <build>
+        <finalName>ROOT</finalName>
+
         <filters>
             <filter>${project.basedir}/config.properties</filter>
         </filters>

@@ -5,21 +5,30 @@ import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.ActeEtatCivil;
 import com.app.jpa.model.Citoyen;
 import com.app.jpa.model.OfficierEtatCivil;
+import com.app.jpa.model.TypeActe;
 import com.app.jpa.model.JPAEnum.StatutActe;
-import com.app.jpa.model.JPAEnum.TypeActe;
+import com.app.util.FileManager; // 💡 AJOUT : Import du gestionnaire de fichiers
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig; // 💡 AJOUT : Import pour la gestion multipart
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part; // 💡 AJOUT : Import pour récupérer le fichier binaire
 
 import java.io.IOException;
 import java.time.LocalDate;
 
 @WebServlet("/acte/formulaire")
+// 💡 CORRECTION 1 : Configuration des limites de tailles pour le téléversement
+// de l'acte numérisé
+@MultipartConfig(fileSizeThreshold = 1024 * 1024 * 1, // 1 Mo
+        maxFileSize = 1024 * 1024 * 15, // 15 Mo maximum par acte
+        maxRequestSize = 1024 * 1024 * 20 // 20 Mo maximum par requête globale
+)
 public class ActeFormServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
@@ -48,14 +57,19 @@ public class ActeFormServlet extends HttpServlet {
             String dateEtablissementStr = request.getParameter("dateEtablissement");
             String lieuEvenement = request.getParameter("lieuEvenement");
             String statutStr = request.getParameter("statut");
-            String fichierPdf = request.getParameter("fichierPdf");
             String observations = request.getParameter("observations");
+
+            // 💡 CORRECTION 2 : Récupération du flux binaire au lieu d'un paramètre textuel
+            // de formulaire
+            Part filePart = request.getPart("fichierPdf");
 
             boolean isModification = (idStr != null && !idStr.trim().isEmpty());
 
             // Objets de relations nécessaires à la création/mise à jour
-            TypeActe typeActe = (idTypeActeStr != null && !idTypeActeStr.isEmpty()) ? TypeActe.valueOf(idTypeActeStr)
+            TypeActe typeActe = (idTypeActeStr != null && !idTypeActeStr.isEmpty())
+                    ? jpa.typeActe.findInCache(idTypeActeStr)
                     : null;
+
             Citoyen principal = (idCitoyenPrincipalStr != null && !idCitoyenPrincipalStr.isEmpty())
                     ? jpa.citoyen.findUnique(Long.parseLong(idCitoyenPrincipalStr))
                     : null;
@@ -78,8 +92,11 @@ public class ActeFormServlet extends HttpServlet {
                     acteExistant.setDateEtablissement(LocalDate.parse(dateEtablissementStr));
                     acteExistant.setLieuEvenement(lieuEvenement.trim());
                     acteExistant.setObservations(observations);
-                    acteExistant.setFichierPdf(
-                            fichierPdf != null && !fichierPdf.trim().isEmpty() ? fichierPdf.trim() : null);
+
+                    // 💡 CORRECTION 3 : Traitement du remplacement de fichier pour les "actes"
+                    String ancienFichierPdf = acteExistant.getFichierPdf();
+                    String fichierPdfFinal = FileManager.replace(ancienFichierPdf, filePart, "actes");
+                    acteExistant.setFichierPdf(fichierPdfFinal);
 
                     if (statutStr != null && !statutStr.isEmpty()) {
                         acteExistant.setStatut(StatutActe.valueOf(statutStr));
@@ -97,21 +114,14 @@ public class ActeFormServlet extends HttpServlet {
                     jpa.acte.update(acteExistant);
                 }
             } else {
-                // ✨ MODE CRÉATION
-
-                // ⚡ RECTIFICATION ICI : Résolution préventive du numéro de l'acte avant l'envoi
-                // au validateur
-                String numeroFinal;
-                if (numeroActe == null || numeroActe.trim().isEmpty()) {
-                    numeroFinal = genererNumeroActe(em);
-                } else {
-                    numeroFinal = numeroActe.trim();
-                }
+                // 💡 CORRECTION 4 : Enregistrement initial du fichier physique sous le dossier
+                // "actes"
+                String fichierPdfFinal = FileManager.replace(null, filePart, "actes");
 
                 // Le numéro final est désormais garanti non-null, `validateRequiredFields`
                 // laissera passer l'entité !
                 ActeEtatCivil nouvelActe = jpa.acte.create(
-                        numeroFinal,
+                        numeroActe,
                         typeActe,
                         principal,
                         officier,
@@ -119,7 +129,7 @@ public class ActeFormServlet extends HttpServlet {
                         LocalDate.parse(dateEtablissementStr),
                         lieuEvenement.trim(),
                         (statutStr != null && !statutStr.isEmpty()) ? StatutActe.valueOf(statutStr) : null,
-                        fichierPdf != null && !fichierPdf.trim().isEmpty() ? fichierPdf.trim() : null);
+                        fichierPdfFinal); // injection de la référence générée par FileManager
 
                 // Assignation des champs spécifiques / optionnels
                 nouvelActe.setObservations(observations);
@@ -145,27 +155,5 @@ public class ActeFormServlet extends HttpServlet {
 
         // Pattern PRG
         response.sendRedirect(request.getContextPath() + "/acte/liste");
-    }
-
-    /**
-     * Génère un numéro d'acte unique au format officiel : ACT-2026-XXXXX
-     */
-    private String genererNumeroActe(EntityManager em) {
-        int anneeCourante = LocalDate.now().getYear(); // Est configuré sur 2026
-        java.util.Random random = new java.util.Random();
-        String numeroGenere;
-        boolean existe;
-
-        do {
-            int uniqueId = 10000 + random.nextInt(90000); // Nombre à 5 chiffres
-            numeroGenere = "ACT-" + anneeCourante + "-" + uniqueId;
-
-            Long count = em.createQuery("SELECT COUNT(a) FROM ActeEtatCivil a WHERE a.numeroActe = :num", Long.class)
-                    .setParameter("num", numeroGenere)
-                    .getSingleResult();
-            existe = count > 0;
-        } while (existe);
-
-        return numeroGenere;
     }
 }

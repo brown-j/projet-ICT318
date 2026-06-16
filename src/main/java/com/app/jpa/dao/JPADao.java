@@ -9,6 +9,7 @@ import java.util.Map;
 import com.app.jpa.model.*;
 import com.app.jpa.model.JPAEnum.*;
 import com.app.util.AuditContext;
+import com.app.util.FileManager;
 import com.app.util.HashUtil;
 
 import jakarta.persistence.EntityManager;
@@ -16,6 +17,8 @@ import jakarta.persistence.NoResultException;
 
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.NotNull;
+
+import java.io.File;
 import java.lang.reflect.Field;
 import java.security.SecureRandom;
 
@@ -34,6 +37,7 @@ public class JPADao {
     public final DemandeAdministrativeDelegate demande;
     public final PaiementDelegate paiement;
     public final JournalAuditDelegate audit;
+    public final TypeActeDelegate typeActe;
 
     public JPADao(EntityManager em) {
         this.em = em;
@@ -43,6 +47,7 @@ public class JPADao {
         this.demande = new DemandeAdministrativeDelegate();
         this.paiement = new PaiementDelegate();
         this.audit = new JournalAuditDelegate();
+        this.typeActe = new TypeActeDelegate();
     }
 
     // ===================================================================================
@@ -125,7 +130,7 @@ public class JPADao {
             return sb.toString();
         }
 
-        private void validateRequiedFields(E entity) {
+        private void validateRequiredFields(E entity) {
             for (Field field : entityClass.getDeclaredFields()) {
                 field.setAccessible(true); // Permet de lire les champs privés
 
@@ -160,11 +165,44 @@ public class JPADao {
          */
         public E create(E entity) {
             // Validation automatique par introspection
-            validateRequiedFields(entity);
+            validateRequiredFields(entity);
 
             em.persist(entity);
             System.out.println("→ [JPADao] " + entityName + " créé avec succès.");
+
+            // ⚡ PATCH : Déclenchement de l'audit pour la création
+            saveAudit("CREATE", entity);
+
             return entity;
+        }
+
+        /**
+         * Met à jour l'état d'une entité en BDD (Merge). (Prisma: prisma.model.update)
+         */
+        public E update(E entity) {
+            E merged = em.merge(entity);
+            System.out.println("→ [JPADao] " + entityName + " mis à jour avec succès.");
+
+            // ⚡ PATCH : Déclenchement de l'audit pour la modification
+            // On passe "merged" car c'est l'entité fraîchement rattachée au contexte JPA
+            saveAudit("UPDATE", merged);
+
+            return merged;
+        }
+
+        /**
+         * Supprime une entité à partir de son identifiant. (Prisma:
+         * prisma.model.delete)
+         */
+        public void delete(Object id) {
+            E entity = findUnique(id);
+            if (entity != null) {
+                em.remove(entity);
+                System.out.println("→ [JPADao] " + entityName + " supprimé avec succès (ID: " + id + ").");
+
+                // ⚡ PATCH : Déclenchement de l'audit pour la suppression
+                saveAudit("DELETE", entity);
+            }
         }
 
         /**
@@ -196,27 +234,6 @@ public class JPADao {
          */
         public List<E> findMany() {
             return em.createQuery("SELECT e FROM " + entityName + " e", entityClass).getResultList();
-        }
-
-        /**
-         * Met à jour l'état d'une entité en BDD (Merge). (Prisma: prisma.model.update)
-         */
-        public E update(E entity) {
-            E merged = em.merge(entity);
-            System.out.println("→ [JPADao] " + entityName + " mis à jour avec succès.");
-            return merged;
-        }
-
-        /**
-         * Supprime une entité à partir de son identifiant. (Prisma:
-         * prisma.model.delete)
-         */
-        public void delete(Object id) {
-            E entity = findUnique(id);
-            if (entity != null) {
-                em.remove(entity);
-                System.out.println("→ [JPADao] " + entityName + " supprimé avec succès (ID: " + id + ").");
-            }
         }
 
         /**
@@ -259,6 +276,18 @@ public class JPADao {
     public class JournalAuditDelegate extends JPADelegate<JournalAudit> {
         public JournalAuditDelegate() {
             super(JournalAudit.class);
+        }
+
+        /**
+         * Récupère les X derniers audits en chargeant immédiatement l'officier lié
+         * (Anti-N+1)
+         */
+        public List<JournalAudit> findRecentWithOfficier(int limit) {
+            return em.createQuery(
+                    "SELECT a FROM JournalAudit a LEFT JOIN FETCH a.officier ORDER BY a.dateAction DESC",
+                    JournalAudit.class)
+                    .setMaxResults(limit)
+                    .getResultList();
         }
     }
 
@@ -409,18 +438,52 @@ public class JPADao {
         public ActeEtatCivil create(String numero, TypeActe type, Citoyen principal, OfficierEtatCivil officier,
                 LocalDate dateEv, LocalDate dateEt, String lieu, StatutActe statut, String pdf) {
             ActeEtatCivil acte = new ActeEtatCivil();
-            acte.setNumeroActe(numero);
+            String numeroFinal;
+            if (numero == null || numero.trim().isEmpty()) {
+                numeroFinal = generateNumeroActe(em, type.getCategorieParent().getShortName());
+            } else {
+                numeroFinal = numero.trim();
+            }
+            acte.setNumeroActe(numeroFinal);
             acte.setTypeActe(type);
             acte.setCitoyenPrincipal(principal);
             acte.setOfficierSignataire(officier);
             acte.setFichierPdf(pdf);
 
-            acte.setDateEvenement(dateEv != null ? dateEv : LocalDate.now().minusDays(2));
-            acte.setDateEtablissement(dateEt != null ? dateEt : LocalDate.now());
-            acte.setLieuEvenement(lieu != null ? lieu : "Yaoundé III");
+            acte.setDateEvenement(dateEv != null ? dateEv : LocalDate.of(0, 1, 1));
+            acte.setDateEtablissement(dateEt != null ? dateEt : LocalDate.of(0, 1, 1));
+            acte.setLieuEvenement(lieu != null ? lieu : "");
             acte.setStatut(statut != null ? statut : StatutActe.EN_COURS);
 
             return super.create(acte);
+        }
+
+        private String generateNumeroActe(EntityManager em, String prefix) {
+            int anneeCourante = LocalDate.now().getYear(); // Est configuré sur 2026
+            java.util.Random random = new java.util.Random();
+            String numeroGenere;
+            boolean existe;
+
+            do {
+                int uniqueId = 10000 + random.nextInt(90000); // Nombre à 5 chiffres
+                numeroGenere = prefix + "-" + anneeCourante + "-" + uniqueId;
+
+                Long count = em
+                        .createQuery("SELECT COUNT(a) FROM ActeEtatCivil a WHERE a.numeroActe = :num", Long.class)
+                        .setParameter("num", numeroGenere)
+                        .getSingleResult();
+                existe = count > 0;
+            } while (existe);
+
+            return numeroGenere;
+        }
+
+        @Override
+        public ActeEtatCivil update(ActeEtatCivil entity) {
+            // empecher la mise à jours du num
+            String num = acte.findUnique(entity.getId()).getNumeroActe();
+            entity.setNumeroActe(num);
+            return super.update(entity);
         }
 
         /**
@@ -468,11 +531,18 @@ public class JPADao {
         /**
          * Méthode de création optimisée pour le jeu d'essai et les formulaires.
          */
-        public DemandeAdministrative create(String numeroSuivi, TypeDemande typeDemande, Citoyen citoyenRequerant,
+        public DemandeAdministrative create(String numeroSuivi, TypeActe type, Citoyen citoyenRequerant,
                 LocalDateTime dateSoumission, StatutDemande statut,
                 PrioriteDemande priorite, String documentFinal) {
 
             DemandeAdministrative d = new DemandeAdministrative();
+
+            // type requis throw
+            // Sécurité : le type d'acte (catalogue) est strictement requis
+            if (type == null) {
+                throw new IllegalArgumentException(
+                        "Erreur: Le type d'acte est requis pour créer une demande.");
+            }
 
             // 💡 Utilisation du générateur si null
             if (numeroSuivi == null || numeroSuivi.trim().isEmpty()) {
@@ -481,13 +551,13 @@ public class JPADao {
                 d.setNumeroSuivi(numeroSuivi.trim().toUpperCase());
             }
 
-            d.setTypeDemande(typeDemande);
+            d.setTypeActe(type);
             d.setCitoyenRequerant(citoyenRequerant);
             d.setDateSoumission(dateSoumission);
             d.setStatut(statut != null ? statut : StatutDemande.SOUMISE);
             d.setPriorite(priorite != null ? priorite : PrioriteDemande.NORMALE);
             d.setDocumentFinal(documentFinal);
-            d.setDescription("Demande pour : " + (typeDemande != null ? typeDemande.name() : "Non spécifié"));
+            d.setDescription("Demande pour : " + type.getDescription());
 
             return super.create(d);
         }
@@ -505,11 +575,23 @@ public class JPADao {
         /**
          * Fait passer une demande à l'état EN_COURS (ex: après paiement).
          */
-        public void marquerEnCours(DemandeAdministrative demande) {
-            if (demande.getStatut() == StatutDemande.SOUMISE) {
-                demande.setStatut(StatutDemande.EN_COURS);
-                update(demande);
-                System.out.println("→ [Action] Demande " + demande.getNumeroSuivi() + " marquée EN_COURS.");
+        public void marquerEnCours(DemandeAdministrative d, OfficierEtatCivil o) {
+            if (d.getStatut() == StatutDemande.SOUMISE) {
+                d.setStatut(StatutDemande.EN_COURS);
+                // creation de l'acte correspondant
+                ActeEtatCivil a = acte.create(
+                        null,
+                        d.getTypeActe(),
+                        d.getCitoyenRequerant(),
+                        o,
+                        null,
+                        null,
+                        null,
+                        StatutActe.EN_COURS,
+                        null);
+                d.setDocumentFinal(a.getNumeroActe()); // ne doit plus etre modifier
+                update(d);
+                System.out.println("→ [Action] Demande " + d.getNumeroSuivi() + " marquée EN_COURS.");
             } else {
                 throw new IllegalStateException("Seule une demande SOUMISE peut passer EN COURS.");
             }
@@ -520,6 +602,18 @@ public class JPADao {
          */
         public void valider(DemandeAdministrative demande) {
             if (demande.getStatut() == StatutDemande.EN_COURS || demande.getStatut() == StatutDemande.SOUMISE) {
+                // doit posseder un acte final
+                ActeEtatCivil acteRef = acte.findFirst("e.numeroActe = ?1", demande.getDocumentFinal());
+
+                if (acteRef == null) {
+                    throw new IllegalStateException("ACTE FINAL introuvable: Absent en BDD");
+                }
+
+                File f = FileManager.get(acteRef.getFichierPdf(), FileManager.ACTE_SUB);
+
+                if (f == null)
+                    throw new IllegalStateException("Fichier de l' ACTE FINAL introuvable");
+
                 demande.setStatut(StatutDemande.VALIDEE);
                 update(demande);
                 System.out.println("→ [Action] Demande " + demande.getNumeroSuivi() + " VALIDEE.");
@@ -535,6 +629,11 @@ public class JPADao {
             if (demande.getStatut() != StatutDemande.CLOTUREE && demande.getStatut() != StatutDemande.VALIDEE) {
                 demande.setStatut(StatutDemande.REJETEE);
                 update(demande);
+                ActeEtatCivil acteRef = acte.findFirst("e.documentFinal = ?1", demande.getDocumentFinal());
+                if (acteRef != null) {
+                    acteRef.setStatut(StatutActe.ANNULE); // ne doit plus etre modifier
+                    acte.update(acteRef);
+                }
                 System.out.println("→ [Action] Demande " + demande.getNumeroSuivi() + " REJETEE.");
             } else {
                 throw new IllegalStateException("Impossible de rejeter une demande déjà validée ou clôturée.");
@@ -545,26 +644,34 @@ public class JPADao {
          * Clôture une demande, y associe le document final et facture la prestation en
          * base.
          * 
-         * @param demande       La demande à clôturer.
-         * @param documentFinal Le chemin/nom du document PDF généré.
-         * @param caissier      L'officier qui valide l'encaissement (Obligatoire).
-         * @param modePaiement  Le moyen de paiement utilisé (si null, passera en
-         *                      ESPECES).
+         * @param demande      La demande à clôturer.
+         * @param caissier     L'officier qui valide l'encaissement (Obligatoire).
+         * @param modePaiement Le moyen de paiement utilisé (si null, passera en
+         *                     ESPECES).
          */
-        public void cloturer(DemandeAdministrative demande, String documentFinal, OfficierEtatCivil caissier,
+        public void cloturer(DemandeAdministrative demande, OfficierEtatCivil caissier,
                 ModePaiement modePaiement) {
             if (demande.getStatut() == StatutDemande.VALIDEE) {
 
+                ActeEtatCivil acteRef = acte.findFirst("e.numeroActe = ?1", demande.getDocumentFinal());
+
+                if (acteRef == null) {
+                    throw new IllegalStateException("ACTE FINAL introuvable: Absent en BDD");
+                }
+
+                File f = FileManager.get(acteRef.getFichierPdf(), FileManager.ACTE_SUB);
+
+                if (f == null)
+                    throw new IllegalStateException("Fichier de l' ACTE FINAL introuvable");
+
                 // 1. Mise à jour de l'état de la demande
                 demande.setStatut(StatutDemande.CLOTUREE);
-                demande.setDocumentFinal(documentFinal);
                 update(demande);
 
-                // 2. Récupération automatique du tarif via le TypeDemande
-                java.math.BigDecimal montant = (demande.getTypeDemande() != null
-                        && demande.getTypeDemande().getTarifFcfa() != null)
-                                ? demande.getTypeDemande().getTarifFcfa()
-                                : java.math.BigDecimal.ZERO;
+                // 2. Récupération automatique du tarif via le catalogue TypeActe en mémoire
+                java.math.BigDecimal montant = (demande.getTypeActe() != null)
+                        ? java.math.BigDecimal.valueOf(demande.getTypeActe().getTarifFCFA())
+                        : java.math.BigDecimal.ZERO;
 
                 // 3. Création et persistance du paiement associé via le delegate existant
                 paiement.create(
@@ -649,5 +756,94 @@ public class JPADao {
             return total != null ? total : java.math.BigDecimal.ZERO;
         }
 
+    }
+
+    // ===================================================================================
+    // DELEGATE DE CONFIGURATION : CATALOGUE CACHÉ EN MÉMOIRE
+    // ===================================================================================
+    public class TypeActeDelegate extends JPADelegate<TypeActe> {
+
+        // 💡 Cache thread-safe partagé par toutes les instances de requêtes
+        private static final java.util.concurrent.ConcurrentHashMap<String, TypeActe> cache = new java.util.concurrent.ConcurrentHashMap<>();
+
+        public TypeActeDelegate() {
+            super(TypeActe.class);
+            // Si le cache est vide lors d'une requête, on force son chargement initial
+            // depuis la BDD
+            if (cache.isEmpty()) {
+                refreshCache();
+            }
+        }
+
+        /**
+         * Recharge complètement les données depuis la base de données vers la mémoire.
+         */
+        public synchronized void refreshCache() {
+            cache.clear();
+            List<TypeActe> tousLesTypes = findMany(); // Appelle le findMany() générique
+            for (TypeActe t : tousLesTypes) {
+                cache.put(t.getCode().toUpperCase(), t);
+            }
+            System.out.println("⚡ [Prisma Cache] Catalogue synchronisé en mémoire (" + cache.size() + " éléments).");
+        }
+
+        /**
+         * 🌟 Style Prisma : Récupère l'élément instantanément depuis la mémoire.
+         * Évite totalement le findUnique en BDD !
+         */
+        public TypeActe findInCache(String code) {
+            if (code == null)
+                return null;
+            return cache.get(code.trim().toUpperCase());
+        }
+
+        /**
+         * 🌟 Style Prisma : Retourne la Map complète pour les composants Select de
+         * l'UI.
+         */
+        public java.util.Map<String, TypeActe> getCache() {
+            return cache;
+        }
+
+        /**
+         * Sauvegarde ou met à jour en base de données ET synchronise immédiatement le
+         * cache.
+         */
+        public TypeActe saveOrUpdate(String code, String libelle, int tarif, String templatePath,
+                CategorieActe categorie, String description) {
+
+            String codeCle = code.trim().toUpperCase();
+
+            // 💡 On cherche d'abord dans le cache au lieu de faire un findUnique BDD
+            TypeActe existant = findInCache(codeCle);
+            TypeActe resultat;
+
+            if (existant == null) {
+                // Mode CREATION
+                TypeActe nouveau = new TypeActe();
+                nouveau.setCode(codeCle);
+                nouveau.setLibelle(libelle);
+                nouveau.setTarifFCFA(tarif);
+                nouveau.setTemplatePath(templatePath);
+                nouveau.setCategorieParent(categorie);
+                nouveau.setDescription(description);
+
+                resultat = create(nouveau);
+            } else {
+                // Mode MODIFICATION (On doit rattacher l'objet au contexte JPA actif via merge)
+                existant.setLibelle(libelle);
+                existant.setTarifFCFA(tarif);
+                existant.setTemplatePath(templatePath);
+                existant.setCategorieParent(categorie);
+                existant.setDescription(description);
+
+                resultat = update(existant);
+            }
+
+            // ⚡ MISE À JOUR DU CACHE EN MÉMOIRE IMMÉDIATE
+            cache.put(codeCle, resultat);
+
+            return resultat;
+        }
     }
 }

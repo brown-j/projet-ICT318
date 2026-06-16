@@ -27,86 +27,110 @@ public class ActiviteData {
         // 2. Initialisation des variables de fallback (par défaut)
         Icons selectedIcon = Icons.POINT_FILLED;
         ThemeColor selectedColor = ThemeColor.NEUTRAL;
-        String generatedTitle = audit.getAction().toLowerCase();
-        String generatedDescription = "Table : " + audit.getTableAffectee();
 
-        // 3. Logique de traduction métier basée sur TES entités (Le Cerveau)
+        String actionRaw = audit.getAction() != null ? audit.getAction().toUpperCase() : "ACTION";
+        String actionTraduit = traduireAction(actionRaw);
+
+        String generatedTitle = actionTraduit;
+        String nomOfficier = (audit.getOfficier() != null) ? audit.getOfficier().getNom() : "Système";
+        String generatedDescription = "Par " + nomOfficier + " (Table: " + audit.getTableAffectee() + ")";
+
+        // 3. Logique de traduction métier corrigée (Prend en compte le nom des classes
+        // Java du JPADao)
         if (audit.getTableAffectee() != null) {
             switch (audit.getTableAffectee().toLowerCase()) {
 
                 case "acte_etat_civil":
+                case "acteetatcivil": // ✨ Correctif : Match "ActeEtatCivil".toLowerCase()
                     selectedIcon = Icons.FILE_CERTIFICATE;
                     selectedColor = ThemeColor.PRIMARY;
-                    generatedTitle = "Acte " + audit.getAction().toLowerCase();
-                    generatedDescription = "Action enregistrée par " +
-                            (audit.getOfficier() != null ? audit.getOfficier().getNom() : "Système");
+                    generatedTitle = "Acte civil " + actionTraduit.toLowerCase();
+                    generatedDescription = "Enregistré dans le registre d'état civil par " + nomOfficier;
                     break;
 
                 case "citoyen":
                     selectedIcon = Icons.USERS;
                     selectedColor = ThemeColor.SUCCESS;
-                    generatedTitle = "Citoyen " + audit.getAction().toLowerCase();
-                    generatedDescription = "Mise à jour du registre population";
+                    generatedTitle = "Citoyen " + actionTraduit.toLowerCase();
+                    generatedDescription = "Fiche citoyen altérée par " + nomOfficier;
                     break;
 
                 case "demande_administrative":
+                case "demandeadministrative": // ✨ Correctif : Match "DemandeAdministrative".toLowerCase()
                     selectedIcon = Icons.CLIPBOARD_LIST;
                     selectedColor = ThemeColor.INFO;
-                    generatedTitle = "Demande " + audit.getAction().toLowerCase();
-                    generatedDescription = "Suivi d'une démarche administrative";
+                    generatedTitle = "Demande " + actionTraduit.toLowerCase();
+                    generatedDescription = "Suivi de dossier mis à jour par " + nomOfficier;
                     break;
 
                 case "officier_etat_civil":
+                case "officieretatcivil": // ✨ Correctif : Match "OfficierEtatCivil".toLowerCase()
                     selectedIcon = Icons.USER_CHECK;
                     selectedColor = ThemeColor.SECONDARY;
-                    generatedTitle = "Officier " + audit.getAction().toLowerCase();
-                    generatedDescription = "Gestion du personnel d'état civil";
+                    generatedTitle = "Compte Officier " + actionTraduit.toLowerCase();
+                    generatedDescription = "Droits ou profils modifiés par " + nomOfficier;
                     break;
 
                 case "paiement":
-                    selectedIcon = Icons.CASH; // ou CURRENCY_FRANC
+                    selectedIcon = Icons.CASH;
                     selectedColor = ThemeColor.ACCENT;
-                    generatedTitle = "Paiement " + audit.getAction().toLowerCase();
-                    generatedDescription = "Opération comptable";
+                    generatedTitle = "Encaissement " + actionTraduit.toLowerCase();
+                    generatedDescription = "Émission d'un reçu de paiement par " + nomOfficier;
                     break;
 
                 case "piece_jointe":
+                case "piecejointe":
                     selectedIcon = Icons.FILE_PLUS;
                     selectedColor = ThemeColor.NEUTRAL;
-                    generatedTitle = "Document " + audit.getAction().toLowerCase();
-                    generatedDescription = "Gestion des pièces jointes";
+                    generatedTitle = "Pièce jointe " + actionTraduit.toLowerCase();
+                    generatedDescription = "Fichier lié à une demande par " + nomOfficier;
                     break;
 
                 case "rendez_vous":
+                case "rendezvous":
                     selectedIcon = Icons.CALENDAR_PLUS;
                     selectedColor = ThemeColor.WARNING;
-                    generatedTitle = "Rendez-vous " + audit.getAction().toLowerCase();
-                    generatedDescription = "Planification au calendrier";
+                    generatedTitle = "Rendez-vous " + actionTraduit.toLowerCase();
+                    generatedDescription = "Planification gérée par " + nomOfficier;
                     break;
 
-                // Regroupement des tables de configuration/paramétrage
                 case "role":
                 case "type_acte":
                 case "type_demande":
+                case "typeacte":
+                case "typedemande":
                     selectedIcon = Icons.CLIPBOARD_LIST;
                     selectedColor = ThemeColor.NEUTRAL;
-                    generatedTitle = "Configuration " + audit.getAction().toLowerCase();
+                    generatedTitle = "Configuration " + actionTraduit.toLowerCase();
                     generatedDescription = "Mise à jour des paramètres système";
                     break;
             }
         }
 
-        // 4. Assignation finale pour la vue (Strings purs)
-        this.iconClass = selectedIcon.toString(); // Appelle automatiquement "ti ti-..."
+        // 4. Assignation finale pour la vue
+        this.iconClass = selectedIcon.toString();
         this.colorClass = selectedColor.name().toLowerCase();
         this.titre = generatedTitle;
-
-        // Optionnel : si ton JSON contient des infos plus précises, tu pourras les
-        // parser ici à l'avenir.
         this.description = generatedDescription;
     }
 
-    // --- Getters (Immutables) ---
+    /**
+     * Petit helper de traduction des actions CRUD pour l'affichage utilisateur
+     */
+    private String traduireAction(String actionRaw) {
+        switch (actionRaw) {
+            case "CREATE":
+                return "Créé";
+            case "UPDATE":
+                return "Modifié";
+            case "DELETE":
+                return "Supprimé";
+            default:
+                return actionRaw;
+        }
+    }
+
+    // --- Getters ---
     public String getIconClass() {
         return iconClass;
     }

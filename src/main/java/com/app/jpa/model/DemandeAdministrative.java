@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 
 import com.app.jpa.model.JPAEnum.PrioriteDemande;
 import com.app.jpa.model.JPAEnum.StatutDemande;
-import com.app.jpa.model.JPAEnum.TypeDemande;
 
 @Entity
 @Table(name = "demande_administrative")
@@ -17,9 +16,9 @@ public class DemandeAdministrative implements Serializable {
     @Column(name = "id_demande")
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type_demande", nullable = false, length = 50)
-    private TypeDemande typeDemande;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "type_acte", nullable = false)
+    private TypeActe typeActe;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_citoyen", nullable = false)
@@ -81,12 +80,12 @@ public class DemandeAdministrative implements Serializable {
         this.id = id;
     }
 
-    public TypeDemande getTypeDemande() {
-        return typeDemande;
+    public TypeActe getTypeActe() {
+        return typeActe;
     }
 
-    public void setTypeDemande(TypeDemande typeDemande) {
-        this.typeDemande = typeDemande;
+    public void setTypeActe(TypeActe typeActe) {
+        this.typeActe = typeActe;
     }
 
     public Citoyen getCitoyenRequerant() {

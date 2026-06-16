@@ -14,7 +14,7 @@ public class ActeCivilRow {
     private final String statutLabel;
     private final String statutColorClass;
     private final boolean afficherPointStatut;
-    private final boolean hasPdf;
+    private final String fichierPdf;
 
     public ActeCivilRow(ActeEtatCivil acte) {
         this.id = acte.getId();
@@ -78,7 +78,7 @@ public class ActeCivilRow {
 
         // 5. Booléen pratique pour la JSP : Savoir si on doit afficher le bouton
         // "Télécharger PDF"
-        this.hasPdf = (acte.getFichierPdf() != null && !acte.getFichierPdf().trim().isEmpty());
+        this.fichierPdf = acte.getFichierPdf();
     }
 
     // --- Getters Immutables pour la sérialisation Gson ---
@@ -118,7 +118,7 @@ public class ActeCivilRow {
         return afficherPointStatut;
     }
 
-    public boolean isHasPdf() {
-        return hasPdf;
+    public String getFichierPdf() {
+        return fichierPdf;
     }
 }

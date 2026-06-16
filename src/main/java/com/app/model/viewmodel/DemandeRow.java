@@ -26,8 +26,8 @@ public class DemandeRow {
         this.id = demande.getId();
         this.numeroSuivi = demande.getNumeroSuivi();
 
-        // 1. Extraction des relations
-        this.typeDemandeLabel = (demande.getTypeDemande() != null) ? demande.getTypeDemande().getLibelle()
+        // 1. Extraction des relations (💡 CORRECTION : Utilisation de getTypeActe())
+        this.typeDemandeLabel = (demande.getTypeActe() != null) ? demande.getTypeActe().getLibelle()
                 : "Non spécifié";
 
         if (demande.getCitoyenRequerant() != null) {

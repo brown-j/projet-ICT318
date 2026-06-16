@@ -14,6 +14,7 @@ public class FormBuilder {
         TEXT,
         EMAIL,
         PASSWORD,
+        NUMBER,
         DATE,
         TEL,
         HIDDEN,
@@ -27,7 +28,6 @@ public class FormBuilder {
 
     public static class FormContainer {
         private String action;
-        // private String method = "POST";
         private List<FormRow> rows = new ArrayList<>();
         private boolean isReadOnly = false;
         private boolean isMultipart = false;
@@ -41,7 +41,6 @@ public class FormBuilder {
             return this;
         }
 
-        // 💡 Permet de basculer tout le formulaire en lecture seule
         public FormContainer readOnly(boolean readOnly) {
             this.isReadOnly = readOnly;
             return this;
@@ -62,20 +61,18 @@ public class FormBuilder {
             html.append("<div class=\"modal-body\">\n");
 
             for (FormRow row : rows) {
-                // On passe l'état global du formulaire aux lignes
                 html.append(row.render(this.isReadOnly));
             }
 
             html.append("</div>\n");
             html.append("<div class=\"modal-footer\">\n");
 
-            // 💡 Si le formulaire est en lecture seule, on ne montre que "Fermer"
             if (this.isReadOnly) {
                 html.append(
-                        "  <button type=\"button\" class=\"btn btn-secondary\" onclick=\"closeModal('acte-civil')\">Fermer</button>\n");
+                        "  <button type=\"button\" class=\"btn btn-secondary\" onclick=\"closeModal('global')\">Fermer</button>\n");
             } else {
                 html.append(
-                        "  <button type=\"button\" class=\"btn btn-ghost\" onclick=\"closeModal('acte-civil')\">Annuler</button>\n");
+                        "  <button type=\"button\" class=\"btn btn-ghost\" onclick=\"closeModal('global')\">Annuler</button>\n");
                 html.append(
                         "  <button type=\"submit\" class=\"btn btn-primary\"><i class=\"ti ti-check\"></i> Enregistrer</button>\n");
             }
@@ -102,7 +99,6 @@ public class FormBuilder {
             return new FormRow(left, right);
         }
 
-        // 💡 La ligne reçoit l'instruction "isReadOnly" du Container
         public String render(boolean formReadOnly) {
             StringBuilder html = new StringBuilder();
             if (items.size() == 1 && items.get(0).type == FormItemType.HIDDEN) {
@@ -112,7 +108,6 @@ public class FormBuilder {
             String gridClass = items.size() == 2 ? "grid cols-2 gap-4 mb-4" : "form-group mb-4";
             html.append("<div class=\"").append(gridClass).append("\">\n");
             for (FormItem item : items) {
-                // Et la passe à l'Item
                 html.append(item.render(formReadOnly));
             }
             html.append("</div>\n");
@@ -164,9 +159,8 @@ public class FormBuilder {
             return this;
         }
 
-        // 💡 Permet de forcer un champ spécifique en lecture seule
-        public FormItem readonly() {
-            this.isReadOnly = true;
+        public FormItem readonly(boolean b) {
+            this.isReadOnly = b;
             return this;
         }
 
@@ -185,7 +179,6 @@ public class FormBuilder {
             return this;
         }
 
-        // 💡 Réception du boolean global
         public String render(boolean formReadOnly) {
             if (type == FormItemType.HIDDEN) {
                 return "<input type=\"hidden\" name=\"" + name + "\" value=\"" + value + "\">\n";
@@ -201,8 +194,17 @@ public class FormBuilder {
                 html.append(" <span class=\"required\" style=\"color:var(--c-danger-500)\">*</span>");
             html.append("</label>\n");
 
+            if (type == FormItemType.FILE && value != null && !value.trim().isEmpty()) {
+                html.append(
+                        "    <div class=\"file-exist-indicator\" style=\"margin-bottom: var(--space-1, 6px); font-size: var(--text-xs, 12px); color: var(--c-success-600, #16a34a); display: flex; align-items: center; gap: 4px;\">\n");
+                html.append("        <i class=\"ti ti-file-check\" style=\"font-size: 15px;\"></i>\n");
+                html.append(
+                        "        <span>Fichier actuel chargé : <code style=\"font-family: var(--font-mono); font-size: 11px;\">")
+                        .append(value).append("</code></span>\n");
+                html.append("    </div>\n");
+            }
+
             if (type == FormItemType.SELECT) {
-                // 💡 CONFIGURATION AUTOMATIQUE DE L'ATTRIBUT "data-searchable"
                 html.append("    <select class=\"form-control\" id=\"").append(name).append("\" name=\"").append(name)
                         .append("\" ").append(required && !effectiveReadOnly ? "required" : "")
                         .append(effectiveReadOnly ? " disabled" : "")
@@ -225,6 +227,13 @@ public class FormBuilder {
                     }
                 }
                 html.append("    </select>\n");
+
+                // 💡 CORRECTION AUTOMATIQUE : Injection du champ caché si le SELECT est
+                // désactivé
+                if (effectiveReadOnly) {
+                    html.append("    <input type=\"hidden\" name=\"").append(name).append("\" value=\"").append(value)
+                            .append("\">\n");
+                }
             } else {
                 html.append("    <input class=\"form-control\" type=\"").append(type.getHtmlType()).append("\" id=\"")
                         .append(name).append("\" name=\"").append(name)

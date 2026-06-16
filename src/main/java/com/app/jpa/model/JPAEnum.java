@@ -1,7 +1,5 @@
 package com.app.jpa.model;
 
-import java.math.BigDecimal;
-
 public class JPAEnum {
 
     public enum ModePaiement {
@@ -180,54 +178,26 @@ public class JPAEnum {
         }
     }
 
-    public enum TypeActe {
-        NAISSANCE("Naissance"),
-        MARIAGE("Mariage"),
-        DECES("Décès");
+    public enum CategorieActe {
+        ACTE("acte"),
+        COPIE("Copie"),
+        EXTRAIT("Extrait"),
+        CERTIFICAT("Certificat"),
+        AUTORISATION("Autorisation"),
+        LEGALISTION("Legalisation");
 
         private final String libelle;
 
-        TypeActe(String libelle) {
+        CategorieActe(String libelle) {
             this.libelle = libelle;
         }
 
         public String getLibelle() {
             return libelle;
         }
-    }
 
-    public enum TypeDemande {
-        ACTE_NAISSANCE("acte de naissance", 3, new BigDecimal("3000.00")),
-        COPIE_NAISSANCE("Copie d'acte de naissance", 2, new BigDecimal("2000.00")),
-        COPIE_MARIAGE("Copie d'acte de mariage", 3, new BigDecimal("3000.00")),
-        COPIE_DECES("Copie d'acte de décès", 1, new BigDecimal("1500.00")),
-        EXTRAIT_NAISSANCE("Extrait naissance", 5, new BigDecimal("5000.00")),
-        CERTIFICAT_CELIBAT("Certificat de célibat", 3, new BigDecimal("2500.00")),
-        CERTIFICAT_COUTUME("Certificat de coutume", 5, new BigDecimal("5000.00")),
-        CERTIFICAT_RESIDENCE("Certificat de Résidence", 3, new BigDecimal("1500.00")),
-        AUTORISATION_CONSTRUIRE("Autorisation construire", 5, new BigDecimal("5000.00")),
-        LEGALISTION_SIGNATURE("Legalisation signature", 5, new BigDecimal("5000.00"));
-
-        private final String libelle;
-        private final Integer delaiStandardJours;
-        private final BigDecimal tarifFcfa;
-
-        TypeDemande(String libelle, Integer delaiStandardJours, BigDecimal tarifFcfa) {
-            this.libelle = libelle;
-            this.delaiStandardJours = delaiStandardJours;
-            this.tarifFcfa = tarifFcfa;
-        }
-
-        public String getLibelle() {
-            return libelle;
-        }
-
-        public Integer getDelaiStandardJours() {
-            return delaiStandardJours;
-        }
-
-        public BigDecimal getTarifFcfa() {
-            return tarifFcfa;
+        public String getShortName() {
+            return name().substring(0, 3);
         }
     }
 }
