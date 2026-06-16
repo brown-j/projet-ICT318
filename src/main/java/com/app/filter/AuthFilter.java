@@ -56,7 +56,7 @@ public class AuthFilter implements Filter {
         } else {
             // ❌ Accès refusé : L'utilisateur n'est pas connecté et essaie d'accéder au
             // back-office protégé
-            response.sendRedirect(loginURI);
+            response.sendRedirect(portalURI);
         }
     }
 

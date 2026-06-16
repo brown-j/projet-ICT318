@@ -5,7 +5,7 @@
          version="6.0">
 
     <!-- Application Name -->
-    <display-name>Mairie Yaoundé III</display-name>
+    <display-name>Mairie CAM</display-name>
     
     <!-- Welcome Files -->
     <welcome-file-list>
@@ -16,11 +16,7 @@
     <!-- Error Pages -->
     <error-page>
         <error-code>404</error-code>
-        <location>/WEB-INF/jsp/errors/404.jsp</location>
-    </error-page>
-    <error-page>
-        <error-code>500</error-code>
-        <location>/WEB-INF/jsp/errors/500.jsp</location>
+        <location>/WEB-INF/jsp/modules/shared/not-found.jsp</location>
     </error-page>
 
 </web-app>

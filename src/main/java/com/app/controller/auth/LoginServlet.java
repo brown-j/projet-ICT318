@@ -12,7 +12,6 @@ import java.io.IOException;
 import com.app.jpa.config.JPAConfig;
 import com.app.jpa.dao.JPADao;
 import com.app.jpa.model.OfficierEtatCivil;
-import com.app.jpa.model.JPAEnum.Role;
 import com.app.jpa.model.JPAEnum.StatutOfficier;
 import com.app.util.HashUtil;
 
@@ -27,14 +26,7 @@ public class LoginServlet extends HttpServlet {
         // Si l'utilisateur est déjà connecté, on évite qu'il revoie la page login
         HttpSession session = request.getSession(false);
         if (session != null && session.getAttribute("user") != null) {
-            OfficierEtatCivil connecte = (OfficierEtatCivil) session.getAttribute("user");
-
-            // Redirection intelligente selon le rôle
-            if (connecte.getRole() == Role.SUPER_ADMIN) {
-                response.sendRedirect(request.getContextPath() + "/dashboard"); // Vers le dashboard global
-            } else {
-                response.sendRedirect(request.getContextPath() + "/citoyen/liste");
-            }
+            response.sendRedirect(request.getContextPath() + "/dashboard"); // Vers le dashboard global
             return;
         }
 

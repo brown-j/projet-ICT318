@@ -25,7 +25,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Portail Citoyen — Mairie de Yaoundé III</title>
+        <title>Portail Citoyen — Mairie CAM</title>
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@
                 </div>
                 <div>
                     <div class="portal-topbar-brand-text">Portail Citoyen</div>
-                    <div class="portal-topbar-brand-sub">Mairie de Yaoundé III</div>
+                    <div class="portal-topbar-brand-sub">Mairie CAM</div>
                 </div>
             </a>
 
@@ -69,7 +69,7 @@
             <section class="portal-hero" role="banner" aria-label="En-tête portail">
                 <div class="portal-hero-eyebrow">
                     <i class="ti ti-lock" aria-hidden="true"></i>
-                    Service sécurisé · Mairie de Yaoundé III
+                    Service sécurisé · Mairie CAM
                 </div>
                 <h1 class="portal-hero-title">Soumettre une demande administrative</h1>
                 <p class="portal-hero-sub">Remplissez le formulaire ci-dessous. Votre demande sera traitée dans les délais légaux et vous recevrez un numéro de suivi unique.</p>

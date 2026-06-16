@@ -2,7 +2,7 @@
 ==========================================
 
 Date: 2 juin 2026
-Projet: Mairie de Yaoundé III - Système de Gestion
+Projet: Mairie CAM - Système de Gestion
 Architecture: Jakarta EE Modulaire
 
 ---
